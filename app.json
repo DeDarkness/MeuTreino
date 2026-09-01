@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "MeuTreino",
+    "slug": "meutreino",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/meutreino-ios-icon.png",
+    "scheme": "meutreino",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "icon": "./assets/images/meutreino-ios-icon.png",
+      "bundleIdentifier": "com.joao.meutreino",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.joao.meutreino",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/meutreino-ios-icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0E1115",
+          "image": "./assets/images/meutreino-splash-mark.png",
+          "imageWidth": 220,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-sqlite",
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
