@@ -1,179 +1,87 @@
-# MeuTreino — app de treino para iPhone
+# MeuTreino
 
-O **MeuTreino é, primeiro, um aplicativo iOS nativo** feito com Expo, React Native e TypeScript. No iPhone você monta e executa o treino, registra séries, repetições e carga, acompanha o descanso e recebe aviso sonoro/háptico quando o tempo termina.
+MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de Início do iPhone. Não usa Expo, App Store, Apple Developer, conta, Supabase ou servidor. Treinos, cargas e histórico ficam no IndexedDB do próprio aparelho.
 
-A versão web é somente um **editor complementar**: ela facilita cadastrar ou alterar fichas usando o teclado do PC ou notebook. Entrando com a mesma conta, as alterações aparecem no iPhone.
+## Recursos
 
-## O que já está pronto
+- Criar, editar, duplicar e excluir fichas.
+- Exercícios com séries, repetições, carga, descanso e observações.
+- Execução série a série, reaproveitando a última carga e repetições registradas.
+- Cronômetro de descanso com `+15 s`, pular, som e vibração.
+- Screen Wake Lock para manter a tela ligada durante o treino quando o iOS permitir.
+- Sessão ativa restaurada após fechar ou recarregar o app.
+- Histórico detalhado por exercício e série.
+- Funcionamento offline depois do primeiro carregamento.
+- Backup e restauração em arquivo JSON.
+- Atualização automática pelo GitHub Pages.
 
-- Criação, edição e exclusão de fichas de treino.
-- Exercícios com nome, séries, repetições e descanso individual.
-- Sessão ativa série a série, com registro de carga e repetições realizadas.
-- Cronômetro de descanso com som, vibração e notificação local no iOS.
-- Histórico com duração, volume de séries e repetições.
-- Preferências de descanso, som, vibração e unidade de peso (`kg` ou `lb`).
-- Funcionamento local mesmo sem internet.
-- Conta por e-mail e senha e sincronização opcional com Supabase.
-- Conciliação automática de alterações realizadas offline.
-- Layout adaptável ao iPhone e ao editor web.
-- Ícone e tela de abertura próprios do MeuTreino.
+## Instalar no iPhone
 
-## Arquitetura do produto
+Depois que o site estiver publicado:
 
-```text
-iPhone (app principal) ─┐
-                       ├─ Supabase ─ mesma conta e mesmos treinos
-PC/notebook (editor) ──┘
-```
+1. Abra o endereço no Safari.
+2. Toque em **Compartilhar**.
+3. Escolha **Adicionar à Tela de Início**.
+4. Ative **Abrir como App** e toque em **Adicionar**.
 
-O app não depende da web para funcionar durante o treino. O Supabase só é necessário para transportar os dados entre o computador e o iPhone.
+O ícone MeuTreino aparecerá na Tela de Início e abrirá em janela própria. O primeiro acesso precisa de internet para baixar e guardar os arquivos; depois o app abre offline.
 
-## Rodar o projeto localmente
+> O alerta sonoro de descanso é confiável enquanto o MeuTreino está visível. Se o iPhone for bloqueado ou o app ficar em segundo plano, o iOS pode suspender o JavaScript. O app recalcula o tempo restante quando volta ao primeiro plano, mas não consegue garantir um som no instante exato enquanto estiver suspenso.
 
-Pré-requisitos: Node.js LTS e npm.
+## Rodar no computador durante o desenvolvimento
+
+Pré-requisitos: Node.js 20.19 ou superior e npm.
 
 ```bash
 npm install
-npm start
+npm run dev
 ```
 
-Para abrir somente o editor no computador:
+Abra o endereço mostrado no terminal. Para simular a largura de um iPhone, use o modo responsivo das ferramentas do navegador.
 
-```bash
-npm run web
-```
-
-O endereço local normalmente será `http://localhost:8081`.
-
-> O projeto usa Expo SDK 57. Para testar todas as funções nativas no iPhone, use um build de preview/TestFlight; a versão pública do Expo Go instalada pela App Store pode estar em outro SDK.
-
-## Instalar um build de teste no iPhone
-
-O build é compilado nos servidores EAS, por isso ele pode ser solicitado a partir do Windows. Você precisa de uma conta Expo e, para assinar e instalar no iPhone, de uma conta Apple Developer.
-
-Na primeira vez:
-
-```bash
-npx eas-cli@latest login
-npx eas-cli@latest init
-npm run build:ios:preview
-```
-
-O EAS orientará o cadastro do aparelho e das credenciais Apple. Ao terminar, ele fornecerá o link de instalação do build interno.
-
-## Gerar a versão para TestFlight/App Store
-
-```bash
-npm run build:ios
-npm run submit:ios
-```
-
-O perfil `production` incrementa automaticamente o número do build. Depois do envio e processamento pela Apple, a versão poderá ser liberada no TestFlight e, mais tarde, submetida à revisão da App Store.
-
-Antes da primeira publicação:
-
-- confirme se `com.joao.meutreino` está livre na sua conta Apple; se necessário, troque o `bundleIdentifier` em `app.json`;
-- cadastre no App Store Connect o nome, descrição, categoria, classificação etária, screenshots e URL pública da política de privacidade;
-- confirme as respostas de privacidade com base nos dados realmente coletados;
-- teste login, sincronização, restauração offline, cronômetro, som e notificações em um iPhone físico.
-
-## Configurar a sincronização entre PC e iPhone
-
-### 1. Preparar o Supabase
-
-1. Crie um projeto no [Supabase](https://supabase.com/).
-2. Abra **SQL Editor** no painel.
-3. Execute todo o conteúdo de `supabase/migrations/001_initial.sql`.
-4. Em **Authentication > Providers**, mantenha o provedor de e-mail habilitado.
-5. Implante a função segura de exclusão de conta:
-
-```bash
-npx supabase@latest login
-npx supabase@latest link --project-ref SEU_PROJECT_REF
-npx supabase@latest functions deploy delete-account
-```
-
-A validação de JWT dessa função deve permanecer ativada; não use `--no-verify-jwt`. A chave administrativa existe somente no ambiente seguro da função e nunca deve ser copiada para o app. A migração cria um documento por usuário, ativa Row Level Security, impede que uma conta leia os treinos de outra e remove os dados sincronizados em cascata quando a conta é excluída.
-
-### 2. Configurar o ambiente local
-
-No PowerShell:
-
-```powershell
-Copy-Item .env.example .env.local
-```
-
-Preencha o arquivo `.env.local`:
-
-```dotenv
-EXPO_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_sua_chave
-EXPO_PUBLIC_PRIVACY_POLICY_URL=https://seu-dominio.com/privacidade.html
-EXPO_PUBLIC_SUPPORT_EMAIL=suporte@seu-dominio.com
-```
-
-Use apenas a chave pública/publishable. Nunca use `service_role` em uma variável `EXPO_PUBLIC_*`.
-
-Depois reinicie o servidor:
-
-```bash
-npx expo start --clear
-```
-
-### 3. Configurar os builds EAS
-
-Cadastre as quatro variáveis como variáveis de ambiente dos ambientes **preview** e **production** no projeto Expo/EAS. O arquivo `.env.local` não é enviado ao build e não deve conter segredos versionados.
-
-### 4. Usar
-
-1. No editor web, abra **Conta**, crie uma conta ou entre.
-2. No iPhone, entre com o mesmo e-mail e senha.
-3. Edite a ficha no PC ou no app.
-4. Os dados são salvos localmente e sincronizados quando houver conexão.
-
-## Privacidade e exclusão de conta
-
-A política está disponível dentro da tela **Conta**. Antes de publicar, revise o modelo em `docs/PRIVACIDADE.md`, preencha o responsável e o contato, publique-o em uma URL HTTPS e use essa URL em `EXPO_PUBLIC_PRIVACY_POLICY_URL` e no campo **Privacy Policy URL** do App Store Connect.
-
-Na mesma tela, uma pessoa conectada pode tocar em **Excluir minha conta**. Após confirmação, o app chama a Edge Function autenticada, exclui a conta inteira do Supabase, remove os dados sincronizados e locais e encerra a sessão.
-
-Também configure uma **Support URL** pública no App Store Connect. As respostas de App Privacy devem refletir o uso real: e-mail, identificador da conta e dados de fitness/treino são usados para funcionalidade e sincronização, vinculados à conta e sem rastreamento.
-
-## Alertas de descanso no iPhone
-
-O fim do descanso usa notificação local, som e feedback háptico. O iOS pedirá permissão e pode silenciar o alerta se o aparelho estiver em modo Silencioso, Foco/Não Perturbe ou se as notificações do MeuTreino estiverem desativadas nos Ajustes.
-
-## Validação técnica
+## Validar
 
 ```bash
 npm run typecheck
 npm run lint
-npm run doctor
-npx expo export --platform ios --output-dir .expo/ios-export
+npm test
+npm run build
+npm run preview
 ```
 
-Para validar o editor web:
+O build estático é gerado em `dist/`.
 
-```bash
-npm run export:web
-```
+## Publicar gratuitamente no GitHub Pages
 
-## Estrutura principal
+O workflow [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml) compila e publica cada atualização enviada para `main`.
+
+1. No GitHub, abra **Settings → Pages**.
+2. Em **Build and deployment**, selecione **GitHub Actions**.
+3. Envie um commit para `main` ou execute o workflow manualmente.
+
+No plano GitHub Free, Pages exige que o repositório seja público. Isso deixa o código visível, mas não publica os treinos: os dados pessoais continuam somente no IndexedDB do iPhone. Se o repositório continuar privado, é necessário GitHub Pro ou outro serviço de hospedagem estática gratuita conectado ao repositório.
+
+O endereço padrão deste projeto será:
 
 ```text
-src/app/                         rotas e entrada do app
-src/screens/                     fichas, histórico e conta
-src/components/                  interface iPhone-first e responsiva
-src/context/                     estado e operações do produto
-src/lib/                         persistência, autenticação, merge e sync
-src/services/rest-alert.ts       alerta nativo de descanso no iOS
-src/services/rest-alert.web.ts   fallback do editor no navegador
-supabase/migrations/             banco, políticas e funções seguras
-supabase/functions/              exclusão autenticada da conta
-assets/images/                   ícone e splash do MeuTreino
-docs/                            modelo público de privacidade
-app.json                         identidade e configuração iOS
-eas.json                         builds internos e de produção
+https://dedarkness.github.io/MeuTreino/
 ```
 
-Tecnologias: Expo SDK 57, React Native, Expo Router, Expo SQLite, Expo Notifications e Supabase.
+## Dados locais e backup
+
+Remover a PWA, apagar os dados do Safari ou uma limpeza de armazenamento do iOS pode eliminar o IndexedDB. Use **Ajustes → Exportar backup** periodicamente e guarde o JSON no app Arquivos ou iCloud Drive. A importação valida o formato antes de substituir os dados atuais.
+
+## Estrutura
+
+```text
+src/screens/              Hoje, fichas, sessão ativa, histórico e ajustes
+src/hooks/                estado React e fila de persistência
+src/lib/database.ts       IndexedDB, validação, seed e backup
+src/lib/workout.ts        regras de treino e sessão
+src/types.ts              modelo de dados local
+public/icons/             ícones PWA e apple-touch-icon
+vite.config.ts            manifest e service worker offline
+.github/workflows/        publicação no GitHub Pages
+```
+
+Tecnologias: React 19, TypeScript, Vite, vite-plugin-pwa, Workbox e IndexedDB nativo.

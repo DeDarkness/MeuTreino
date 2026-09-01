@@ -1,53 +1,29 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# Dependências e builds
 node_modules/
-
-# Expo
-.expo/
 dist/
-web-build/
-expo-env.d.ts
+*.tsbuildinfo
 
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# local env files
+# Ambiente local
 .env
 .env.*
 !.env.example
-.env*.local
 
-# typescript
-*.tsbuildinfo
-
-# generated native folders
-/ios
-/android
-
-# local assistant tooling
+# Ferramentas e sistema
+.DS_Store
+Thumbs.db
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.vscode/
 .claude/
 CLAUDE.md
 
-# unused Expo starter artwork kept only in the local template
+# Resíduos locais da versão Expo anterior
+.expo/
+expo-env.d.ts
+web-build/
+/ios/
+/android/
 assets/expo.icon/
 assets/images/expo-*.png
 assets/images/favicon.png
