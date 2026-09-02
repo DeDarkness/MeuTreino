@@ -49,4 +49,45 @@ describe('treinos semanais prontos', () => {
     expect(upgraded.plans.some((plan) => plan.id === 'plano-pessoal')).toBe(true);
     expect(upgraded.plans.some((plan) => plan.id === 'plan-treino-a')).toBe(false);
   });
+
+  it('remove somente uma sessão de exemplo que ainda não foi usada', () => {
+    const currentState = createSeedState('2026-09-01T12:00:00.000Z');
+    const legacyPlan = { ...currentState.plans[0], id: 'plan-treino-a', name: 'Treino A' };
+    const legacyWorkout = {
+      id: 'sessao-exemplo',
+      planId: legacyPlan.id,
+      planName: legacyPlan.name,
+      startedAt: '2026-09-01T12:00:00.000Z',
+      updatedAt: '2026-09-01T12:00:00.000Z',
+      currentExerciseIndex: 0,
+      currentSetIndex: 0,
+      restStartedAt: null,
+      restEndsAt: null,
+      restDurationSeconds: null,
+      exercises: legacyPlan.exercises.map((item) => ({
+        exerciseId: item.id,
+        exerciseName: item.name,
+        restSeconds: item.restSeconds,
+        sets: Array.from({ length: item.targetSets }, (_, index) => ({
+          id: `${item.id}-${index + 1}`,
+          setNumber: index + 1,
+          targetReps: item.targetReps,
+          reps: item.targetReps,
+          weight: null,
+          completed: false,
+          completedAt: null,
+        })),
+      })),
+    };
+    const legacyState: AppState = {
+      ...currentState,
+      starterPlanVersion: undefined,
+      plans: [legacyPlan],
+      activeWorkout: legacyWorkout,
+    };
+
+    expect(installWeeklyWorkoutPlans(legacyState).activeWorkout).toBeNull();
+    legacyWorkout.exercises[0].sets[0].completed = true;
+    expect(installWeeklyWorkoutPlans({ ...legacyState, activeWorkout: legacyWorkout }).activeWorkout).not.toBeNull();
+  });
 });

@@ -118,11 +118,18 @@ export function installWeeklyWorkoutPlans(state: AppState, now = new Date().toIS
   const preservedPlans = state.plans.filter(
     (plan) => !LEGACY_SAMPLE_PLAN_IDS.has(plan.id) && !weeklyIds.has(plan.id),
   );
+  const unusedLegacyWorkout = Boolean(
+    state.activeWorkout
+    && state.activeWorkout.planId
+    && LEGACY_SAMPLE_PLAN_IDS.has(state.activeWorkout.planId)
+    && state.activeWorkout.exercises.every((item) => item.sets.every((set) => !set.completed)),
+  );
 
   return {
     ...state,
     starterPlanVersion: STARTER_PLAN_VERSION,
     plans: [...weeklyPlans, ...preservedPlans],
+    activeWorkout: unusedLegacyWorkout ? null : state.activeWorkout,
     updatedAt: now,
   };
 }
