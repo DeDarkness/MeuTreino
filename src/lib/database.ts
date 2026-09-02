@@ -9,19 +9,23 @@ import {
   type WorkoutHistory,
   type WorkoutPlan,
   type WorkoutSetHistory,
+  type WallpaperAsset,
 } from '../types';
 import { createWeeklyWorkoutPlans, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION } from './starterPlans';
 
 const DATABASE_NAME = 'meutreino';
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const STATE_STORE = 'state';
 const STATE_KEY = 'app-state';
+const WALLPAPER_STORE = 'wallpaper';
+const WALLPAPER_KEY = 'active-wallpaper' as const;
 const BACKUP_VERSION = 1 as const;
 const MAX_EXERCISES_PER_PLAN = 20;
 const MAX_SETS_PER_EXERCISE = 20;
 const MAX_REPS = 9999;
 const MAX_REST_SECONDS = 3600;
 const MAX_WEIGHT = 100000;
+const MAX_WALLPAPER_BYTES = 150 * 1024 * 1024;
 
 type StoredStateRecord = {
   id: typeof STATE_KEY;
@@ -300,6 +304,9 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!database.objectStoreNames.contains(STATE_STORE)) {
         database.createObjectStore(STATE_STORE, { keyPath: 'id' });
       }
+      if (!database.objectStoreNames.contains(WALLPAPER_STORE)) {
+        database.createObjectStore(WALLPAPER_STORE, { keyPath: 'id' });
+      }
     };
     request.onsuccess = () => {
       const database = request.result;
@@ -329,6 +336,71 @@ function writeRecord(database: IDBDatabase, state: AppState): Promise<void> {
     transaction.onerror = () => reject(transaction.error ?? new Error('Não foi possível salvar os dados locais.'));
     transaction.onabort = () => reject(transaction.error ?? new Error('A gravação dos dados locais foi cancelada.'));
   });
+}
+
+function wallpaperKind(file: File): WallpaperAsset['kind'] | null {
+  if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('video/')) return 'video';
+  if (/\.(jpe?g|png|gif|webp|avif|heic)$/i.test(file.name)) return 'image';
+  if (/\.(mp4|mov|m4v|webm)$/i.test(file.name)) return 'video';
+  return null;
+}
+
+export async function loadWallpaper(): Promise<WallpaperAsset | null> {
+  const database = await openDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = database.transaction(WALLPAPER_STORE, 'readonly');
+      const request = transaction.objectStore(WALLPAPER_STORE).get(WALLPAPER_KEY);
+      request.onsuccess = () => resolve((request.result as WallpaperAsset | undefined) ?? null);
+      request.onerror = () => reject(request.error ?? new Error('Não foi possível abrir o wallpaper.'));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+export async function saveWallpaper(file: File): Promise<WallpaperAsset> {
+  const kind = wallpaperKind(file);
+  if (!kind) throw new Error('Escolha uma imagem ou um vídeo compatível.');
+  if (file.size === 0) throw new Error('O arquivo escolhido está vazio.');
+  if (file.size > MAX_WALLPAPER_BYTES) throw new Error('Escolha um wallpaper de até 150 MB.');
+
+  const asset: WallpaperAsset = {
+    id: WALLPAPER_KEY,
+    kind,
+    blob: file,
+    name: file.name,
+    size: file.size,
+    updatedAt: new Date().toISOString(),
+  };
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(WALLPAPER_STORE, 'readwrite');
+      transaction.objectStore(WALLPAPER_STORE).put(asset);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error('Não foi possível salvar o wallpaper.'));
+      transaction.onabort = () => reject(transaction.error ?? new Error('O iPhone não conseguiu guardar este arquivo.'));
+    });
+    return asset;
+  } finally {
+    database.close();
+  }
+}
+
+export async function removeWallpaper(): Promise<void> {
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(WALLPAPER_STORE, 'readwrite');
+      transaction.objectStore(WALLPAPER_STORE).delete(WALLPAPER_KEY);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error('Não foi possível remover o wallpaper.'));
+    });
+  } finally {
+    database.close();
+  }
 }
 
 export async function loadState(): Promise<AppState> {

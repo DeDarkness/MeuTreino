@@ -109,3 +109,14 @@ export interface AppStateBackup {
   exportedAt: IsoDateString;
   state: AppState;
 }
+
+export type WallpaperKind = 'image' | 'video';
+
+export interface WallpaperAsset {
+  id: 'active-wallpaper';
+  kind: WallpaperKind;
+  blob: Blob;
+  name: string;
+  size: number;
+  updatedAt: IsoDateString;
+}

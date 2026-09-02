@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { BottomNav, type AppTab } from './components/BottomNav';
 import { UpdatePrompt } from './components/UpdatePrompt';
+import { WallpaperBackdrop } from './components/WallpaperBackdrop';
+import { useWallpaper } from './hooks/useWallpaper';
 import { useWorkoutStore } from './hooks/useWorkoutStore';
 import { getRestNotificationPermission, requestRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
@@ -10,12 +12,14 @@ import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { PlansScreen } from './screens/PlansScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
+import { WallpaperScreen } from './screens/WallpaperScreen';
 import type { ActiveWorkoutSet, WorkoutPlan } from './types';
 
 type NavigatorWithStandalone = Navigator & { standalone?: boolean };
 
 export default function App() {
   const store = useWorkoutStore();
+  const wallpaper = useWallpaper();
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [showActiveWorkout, setShowActiveWorkout] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -152,7 +156,8 @@ export default function App() {
 
   if (showActiveWorkout && activeWorkout) {
     return (
-      <div className="app-shell active-mode">
+      <div className={`app-shell active-mode${wallpaper.asset ? ' has-wallpaper' : ''}`}>
+        <WallpaperBackdrop asset={wallpaper.asset} url={wallpaper.url} />
         {store.error ? (
           <div className="global-error active-error" role="alert">
             <AlertTriangle size={18} />
@@ -203,7 +208,8 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${wallpaper.asset ? ' has-wallpaper' : ''}`}>
+      <WallpaperBackdrop asset={wallpaper.asset} url={wallpaper.url} />
       <main className="app-content">
         {store.error ? (
           <div className="global-error" role="alert">
@@ -246,6 +252,17 @@ export default function App() {
           />
         ) : null}
 
+        {activeTab === 'wallpaper' ? (
+          <WallpaperScreen
+            asset={wallpaper.asset}
+            url={wallpaper.url}
+            loading={wallpaper.loading}
+            error={wallpaper.error}
+            onSave={wallpaper.save}
+            onRemove={wallpaper.remove}
+          />
+        ) : null}
+
         {activeTab === 'settings' ? (
           <SettingsScreen
             preferences={state.preferences}
@@ -255,7 +272,7 @@ export default function App() {
             onExport={exportBackup}
             onImport={async (file) => { await store.importData(await file.text()); }}
             onClear={async () => {
-              await store.clearData();
+              await Promise.all([store.clearData(), wallpaper.remove()]);
               setActiveTab('home');
             }}
             onRequestPersistence={requestPersistence}
