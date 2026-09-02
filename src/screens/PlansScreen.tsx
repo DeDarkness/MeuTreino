@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
 
+import { useNumericDraft } from '../hooks/useNumericDraft';
 import type { ActiveWorkout, Exercise, WorkoutPlan } from '../types';
 import './plans-screen.css';
 
@@ -500,23 +501,23 @@ function NumberField({
   onChange: (value: number) => void;
 }) {
   const labelId = useId();
-  const update = (next: number) => onChange(Math.min(max, Math.max(min, Number.isFinite(next) ? next : min)));
+  const numeric = useNumericDraft({ value, min, max, step, integer: true, onChange });
   return (
     <div className="plans-number-field">
       <span id={labelId}>{label}</span>
       <div>
-        <button type="button" aria-label={`Diminuir ${label}`} disabled={value <= min} onClick={() => update(value - step)}>−</button>
+        <button type="button" aria-label={`Diminuir ${label}`} disabled={value <= min} onClick={numeric.decrement}>−</button>
         <input
-          type="number"
+          type="text"
           inputMode="numeric"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          onChange={(event) => update(event.target.valueAsNumber)}
+          pattern="[0-9]*"
+          value={numeric.draft}
+          onFocus={numeric.onFocus}
+          onBlur={numeric.onBlur}
+          onChange={(event) => numeric.onDraftChange(event.target.value)}
           aria-labelledby={labelId}
         />
-        <button type="button" aria-label={`Aumentar ${label}`} disabled={value >= max} onClick={() => update(value + step)}>+</button>
+        <button type="button" aria-label={`Aumentar ${label}`} disabled={value >= max} onClick={numeric.increment}>+</button>
       </div>
     </div>
   );

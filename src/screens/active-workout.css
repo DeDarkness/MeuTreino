@@ -136,15 +136,29 @@
   transition: width 260ms ease;
 }
 
-.active-workout__wake-status {
+.active-workout__notification-status {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0;
+  align-items: center;
   gap: 6px;
   margin-top: 10px;
+  border: 0;
+  background: transparent;
   color: #808981;
   font-size: 0.72rem;
+  font-weight: 700;
 }
 
-.active-workout__wake-status.is-active {
+.active-workout__notification-status.is-active {
   color: #b8d98d;
+}
+
+button.active-workout__notification-status {
+  color: var(--aw-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .active-workout__current-card,

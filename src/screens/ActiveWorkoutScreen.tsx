@@ -7,13 +7,14 @@ import {
   Minus,
   Plus,
   SkipForward,
-  Smartphone,
   Trophy,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useNumericDraft } from '../hooks/useNumericDraft';
 import { fromStoredWeight, toStoredWeight } from '../lib/format';
+import { showRestFinishedNotification, type RestNotificationPermission } from '../lib/notifications';
 import type {
   ActiveWorkout,
   ActiveWorkoutSet,
@@ -38,11 +39,8 @@ export interface ActiveWorkoutScreenProps {
   onFinish: () => void;
   onAbandon: () => void;
   onClose: () => void;
-}
-
-interface WakeLockSentinelLike extends EventTarget {
-  readonly released: boolean;
-  release: () => Promise<void>;
+  notificationPermission: RestNotificationPermission;
+  onRequestNotifications: () => Promise<RestNotificationPermission>;
 }
 
 type AudioContextConstructor = typeof AudioContext;
@@ -58,12 +56,12 @@ export function ActiveWorkoutScreen({
   onFinish,
   onAbandon,
   onClose,
+  notificationPermission,
+  onRequestNotifications,
 }: ActiveWorkoutScreenProps) {
   const now = useCurrentTime();
   const audioContextRef = useRef<AudioContext | null>(null);
   const alertedRestRef = useRef<string | null>(null);
-  const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
-  const [wakeLockActive, setWakeLockActive] = useState(false);
 
   const totalSets = useMemo(
     () => workout.exercises.reduce((total, exercise) => total + exercise.sets.length, 0),
@@ -94,42 +92,6 @@ export function ActiveWorkoutScreen({
     [currentSet?.setNumber, exercise?.exerciseId, exercise?.exerciseName, history],
   );
 
-  const requestWakeLock = useCallback(async () => {
-    const wakeLockApi = (navigator as unknown as {
-      wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinelLike> };
-    }).wakeLock;
-    if (!wakeLockApi || document.visibilityState !== 'visible' || wakeLockRef.current) return;
-
-    try {
-      const sentinel = await wakeLockApi.request('screen');
-      wakeLockRef.current = sentinel;
-      setWakeLockActive(true);
-      sentinel.addEventListener('release', () => {
-        if (wakeLockRef.current === sentinel) wakeLockRef.current = null;
-        setWakeLockActive(false);
-      }, { once: true });
-    } catch {
-      setWakeLockActive(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const initialRequest = window.setTimeout(() => void requestWakeLock(), 0);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void requestWakeLock();
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.clearTimeout(initialRequest);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      const sentinel = wakeLockRef.current;
-      wakeLockRef.current = null;
-      if (sentinel && !sentinel.released) void sentinel.release();
-    };
-  }, [requestWakeLock]);
-
   useEffect(() => {
     if (!workout.restEndsAt || restEndMs === null || Number.isNaN(restEndMs)) {
       alertedRestRef.current = null;
@@ -142,8 +104,9 @@ export function ActiveWorkoutScreen({
     if (preferences.vibrationEnabled && 'vibrate' in navigator) {
       navigator.vibrate([180, 90, 180, 90, 260]);
     }
+    void showRestFinishedNotification(exercise?.exerciseName ?? 'próxima série', currentSet?.setNumber ?? 1);
     onSkipRest();
-  }, [now, onSkipRest, preferences.restAlertSound, preferences.soundEnabled, preferences.vibrationEnabled, restEndMs, workout.restEndsAt]);
+  }, [currentSet?.setNumber, exercise?.exerciseName, now, onSkipRest, preferences.restAlertSound, preferences.soundEnabled, preferences.vibrationEnabled, restEndMs, workout.restEndsAt]);
 
   const primeAudio = useCallback(() => {
     if (!preferences.soundEnabled) return;
@@ -153,7 +116,6 @@ export function ActiveWorkoutScreen({
 
   const completeCurrentSet = () => {
     primeAudio();
-    void requestWakeLock();
     onCompleteSet();
   };
 
@@ -219,10 +181,7 @@ export function ActiveWorkoutScreen({
         >
           <div className="active-workout__progress-fill" style={{ width: `${progress * 100}%` }} />
         </div>
-        <div className={`active-workout__wake-status${wakeLockActive ? ' is-active' : ''}`}>
-          <Smartphone aria-hidden="true" size={15} />
-          {wakeLockActive ? 'Tela mantida ativa' : 'A tela pode apagar para economizar bateria'}
-        </div>
+        <NotificationStatus permission={notificationPermission} onRequest={onRequestNotifications} />
       </section>
 
       <section className="active-workout__current-card">
@@ -347,31 +306,54 @@ function SetControl({
   inputMode: 'numeric' | 'decimal';
   onChange: (value: number) => void;
 }) {
-  const setValue = (next: number) => onChange(Math.max(min, roundToStep(next, step)));
+  const numeric = useNumericDraft({ value, min, step, integer: inputMode === 'numeric', onChange });
 
   return (
     <div className="active-workout__set-control">
       <label>{label}</label>
       <div className="active-workout__stepper">
-        <button type="button" aria-label={`Diminuir ${label}`} onClick={() => setValue(value - step)}>
+        <button type="button" aria-label={`Diminuir ${label}`} onClick={numeric.decrement}>
           <Minus aria-hidden="true" size={24} strokeWidth={2.5} />
         </button>
         <input
           aria-label={label}
           inputMode={inputMode}
-          min={min}
-          step={step}
-          type="number"
-          value={value}
-          onChange={(event) => {
-            const next = Number(event.target.value);
-            if (Number.isFinite(next)) setValue(next);
-          }}
+          type="text"
+          pattern={inputMode === 'numeric' ? '[0-9]*' : '[0-9]*[.,]?[0-9]*'}
+          value={numeric.draft}
+          onFocus={numeric.onFocus}
+          onBlur={numeric.onBlur}
+          onChange={(event) => numeric.onDraftChange(event.target.value)}
         />
-        <button type="button" aria-label={`Aumentar ${label}`} onClick={() => setValue(value + step)}>
+        <button type="button" aria-label={`Aumentar ${label}`} onClick={numeric.increment}>
           <Plus aria-hidden="true" size={24} strokeWidth={2.5} />
         </button>
       </div>
+    </div>
+  );
+}
+
+function NotificationStatus({
+  permission,
+  onRequest,
+}: {
+  permission: RestNotificationPermission;
+  onRequest: () => Promise<RestNotificationPermission>;
+}) {
+  if (permission === 'granted') {
+    return <div className="active-workout__notification-status is-active"><BellRing aria-hidden="true" size={15} /> Avisos do iPhone ativados</div>;
+  }
+  if (permission === 'default') {
+    return (
+      <button className="active-workout__notification-status" type="button" onClick={() => void onRequest()}>
+        <BellRing aria-hidden="true" size={15} /> Ativar avisos de descanso
+      </button>
+    );
+  }
+  return (
+    <div className="active-workout__notification-status">
+      <BellRing aria-hidden="true" size={15} />
+      {permission === 'denied' ? 'Avisos bloqueados nos Ajustes do iPhone' : 'Instale o app para ativar notificações'}
     </div>
   );
 }
@@ -482,11 +464,6 @@ function normalized(value: string) {
 function clampIndex(index: number, length: number) {
   if (length <= 0) return 0;
   return Math.min(Math.max(0, index), length - 1);
-}
-
-function roundToStep(value: number, step: number) {
-  const decimals = step.toString().split('.')[1]?.length ?? 0;
-  return Number((Math.round(value / step) * step).toFixed(decimals));
 }
 
 function formatWeight(value: number) {

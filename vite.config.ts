@@ -39,6 +39,7 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',
+        importScripts: ['notification-sw.js'],
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         globIgnores: ['icons/icon-*.png'],
       },

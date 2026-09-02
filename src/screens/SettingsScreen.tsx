@@ -1,6 +1,7 @@
 import { BellRing, Check, Database, Download, Info, LockKeyhole, Smartphone, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 
+import type { RestNotificationPermission } from '../lib/notifications';
 import type { Preferences } from '../types';
 
 type SettingsScreenProps = {
@@ -12,6 +13,8 @@ type SettingsScreenProps = {
   onImport: (file: File) => Promise<void>;
   onClear: () => Promise<void>;
   onRequestPersistence: () => Promise<boolean>;
+  notificationPermission: RestNotificationPermission;
+  onRequestNotifications: () => Promise<RestNotificationPermission>;
 };
 
 export function SettingsScreen({
@@ -23,6 +26,8 @@ export function SettingsScreen({
   onImport,
   onClear,
   onRequestPersistence,
+  notificationPermission,
+  onRequestNotifications,
 }: SettingsScreenProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -50,6 +55,16 @@ export function SettingsScreen({
       {message ? <div className="toast-message" role="status">{message}<button type="button" onClick={() => setMessage(null)}>×</button></div> : null}
 
       <SettingsGroup title="Alertas do descanso" icon={<BellRing />}>
+        {notificationPermission === 'granted' ? (
+          <div className="installed-state"><Check /><div><strong>Notificações autorizadas</strong><p>O iPhone pode mostrar o aviso quando o descanso terminar.</p></div></div>
+        ) : notificationPermission === 'default' ? (
+          <button className="setting-action" type="button" onClick={() => void (async () => {
+            const permission = await onRequestNotifications();
+            setMessage(permission === 'granted' ? 'Notificações ativadas.' : 'A permissão de notificações não foi concedida.');
+          })()}><BellRing /> <span><strong>Ativar notificações</strong><small>O iPhone perguntará se você aceita receber os avisos.</small></span></button>
+        ) : (
+          <p className="settings-note"><Info size={16} /> {notificationPermission === 'denied' ? 'As notificações estão bloqueadas. Ative-as em Ajustes → Notificações → MeuTreino.' : 'Instale o MeuTreino na Tela de Início para permitir notificações no iPhone.'}</p>
+        )}
         <ToggleRow
           label="Som ao terminar"
           description="Toca um aviso quando o contador chega a zero."
@@ -73,7 +88,7 @@ export function SettingsScreen({
             ))}
           </div>
         </div>
-        <p className="settings-note"><Info size={16} /> Mantenha o MeuTreino aberto durante o descanso para ouvir o aviso. O iOS pode pausar o app em segundo plano.</p>
+        <p className="settings-note"><Info size={16} /> A tela poderá apagar normalmente. Como o cronômetro é local, o iOS pode atrasar o aviso caso suspenda o Web App com a tela bloqueada.</p>
       </SettingsGroup>
 
       <SettingsGroup title="Padrões do treino" icon={<Smartphone />}>
@@ -142,7 +157,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 2.0 · PWA pessoal e offline</span></footer>
+      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 2.1 · PWA pessoal e offline</span></footer>
     </section>
   );
 }

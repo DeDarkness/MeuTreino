@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BottomNav, type AppTab } from './components/BottomNav';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { useWorkoutStore } from './hooks/useWorkoutStore';
+import { getRestNotificationPermission, requestRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -19,6 +20,7 @@ export default function App() {
   const [showActiveWorkout, setShowActiveWorkout] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [storagePersistent, setStoragePersistent] = useState<boolean | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<RestNotificationPermission>(() => getRestNotificationPermission());
   const runAction = (operation: Promise<unknown>) => { void operation.catch(() => undefined); };
 
   useEffect(() => {
@@ -27,6 +29,12 @@ export default function App() {
     update();
     media.addEventListener?.('change', update);
     return () => media.removeEventListener?.('change', update);
+  }, []);
+
+  useEffect(() => {
+    const refreshPermission = () => setNotificationPermission(getRestNotificationPermission());
+    document.addEventListener('visibilitychange', refreshPermission);
+    return () => document.removeEventListener('visibilitychange', refreshPermission);
   }, []);
 
   useEffect(() => {
@@ -88,6 +96,10 @@ export default function App() {
   }
 
   const openWorkout = async (plan: WorkoutPlan) => {
+    if (isStandalone && notificationPermission === 'default') {
+      const permission = await requestRestNotificationPermission();
+      setNotificationPermission(permission);
+    }
     if (state.activeWorkout) {
       if (state.activeWorkout.planId !== plan.id) return;
       setShowActiveWorkout(true);
@@ -130,6 +142,12 @@ export default function App() {
     const granted = await navigator.storage.persist();
     setStoragePersistent(granted);
     return granted;
+  };
+
+  const requestNotifications = async () => {
+    const permission = await requestRestNotificationPermission();
+    setNotificationPermission(permission);
+    return permission;
   };
 
   if (showActiveWorkout && activeWorkout) {
@@ -176,6 +194,8 @@ export default function App() {
             void store.abandonWorkout().then(() => setShowActiveWorkout(false)).catch(() => undefined);
           }}
           onClose={() => setShowActiveWorkout(false)}
+          notificationPermission={notificationPermission}
+          onRequestNotifications={requestNotifications}
         />
         <UpdatePrompt />
       </div>
@@ -239,6 +259,8 @@ export default function App() {
               setActiveTab('home');
             }}
             onRequestPersistence={requestPersistence}
+            notificationPermission={notificationPermission}
+            onRequestNotifications={requestNotifications}
           />
         ) : null}
       </main>

@@ -8,7 +8,7 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 - Exercícios com séries, repetições, carga, descanso e observações.
 - Execução série a série, reaproveitando a última carga e repetições registradas.
 - Cronômetro de descanso com `+15 s`, pular, som e vibração.
-- Screen Wake Lock para manter a tela ligada durante o treino quando o iOS permitir.
+- Notificação de fim do descanso, com permissão solicitada diretamente pelo iPhone no app instalado.
 - Sessão ativa restaurada após fechar ou recarregar o app.
 - Histórico detalhado por exercício e série.
 - Funcionamento offline depois do primeiro carregamento.
@@ -26,7 +26,7 @@ Depois que o site estiver publicado:
 
 O ícone MeuTreino aparecerá na Tela de Início e abrirá em janela própria. O primeiro acesso precisa de internet para baixar e guardar os arquivos; depois o app abre offline.
 
-> O alerta sonoro de descanso é confiável enquanto o MeuTreino está visível. Se o iPhone for bloqueado ou o app ficar em segundo plano, o iOS pode suspender o JavaScript. O app recalcula o tempo restante quando volta ao primeiro plano, mas não consegue garantir um som no instante exato enquanto estiver suspenso.
+> A tela pode apagar normalmente durante o descanso. O alerta sonoro funciona com o app ativo e, após autorização, o MeuTreino também tenta mostrar uma notificação do iPhone. Como o cronômetro é totalmente local e não há servidor de Web Push, o iOS pode suspender o Web App e atrasar o aviso até o app voltar a executar.
 
 ## Rodar no computador durante o desenvolvimento
 
