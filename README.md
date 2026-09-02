@@ -8,6 +8,7 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 - Rotina de segunda a sábado já cadastrada, com 39 exercícios e 130 séries.
 - Seletor visual do dia de treino na tela inicial.
 - Wallpaper personalizado com foto, GIF ou vídeo em loop salvo somente no aparelho.
+- Wallpaper animado do Toji incluído como preset de aplicação imediata.
 - Exercícios com séries, repetições, carga, descanso e observações.
 - Execução série a série, reaproveitando a última carga e repetições registradas.
 - Cronômetro de descanso com `+15 s`, pular, som e vibração.

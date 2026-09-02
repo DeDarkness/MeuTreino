@@ -1,4 +1,4 @@
-import { Check, Download, ExternalLink, Film, Image as ImageIcon, Info, Sparkles, Trash2, Upload } from 'lucide-react';
+import { Check, Film, Image as ImageIcon, Info, Sparkles, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import type { WallpaperAsset } from '../types';
@@ -13,12 +13,14 @@ type WallpaperScreenProps = {
 };
 
 const TOJI_SOURCE_URL = 'https://mylivewallpapers.com/anime/toji-fushiguro-jjk-live-wallpaper/';
-const TOJI_DOWNLOAD_URL = 'https://mylivewallpapers.com/download/mobile-toji-fushiguro-jjk-live-wallpaper/';
+const TOJI_FILE_NAME = 'Toji Fushiguro JJK.mp4';
+const TOJI_VIDEO_URL = `${import.meta.env.BASE_URL}wallpapers/toji-fushiguro-jjk.mp4`;
 
 export function WallpaperScreen({ asset, url, loading, error, onSave, onRemove }: WallpaperScreenProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const tojiIsActive = asset?.name === TOJI_FILE_NAME;
 
   const chooseFile = async (file?: File) => {
     if (!file) return;
@@ -41,6 +43,22 @@ export function WallpaperScreen({ asset, url, loading, error, onSave, onRemove }
       setMessage('Fundo animado padrão restaurado.');
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'Não foi possível remover o wallpaper.');
+    }
+  };
+
+  const applyToji = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const response = await fetch(TOJI_VIDEO_URL);
+      if (!response.ok) throw new Error('Não foi possível abrir o vídeo do Toji.');
+      const blob = await response.blob();
+      await onSave(new File([blob], TOJI_FILE_NAME, { type: 'video/mp4' }));
+      setMessage('Toji aplicado! O vídeo está em loop e disponível offline.');
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Não foi possível aplicar o Toji.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -104,30 +122,23 @@ export function WallpaperScreen({ asset, url, loading, error, onSave, onRemove }
 
       <article className="wallpaper-featured">
         <div className="wallpaper-featured__art" aria-hidden="true">
-          <span className="wallpaper-featured__moon" />
-          <span className="wallpaper-featured__slash" />
+          <video src={TOJI_VIDEO_URL} autoPlay loop muted playsInline preload="metadata" />
           <strong>TOJI</strong>
           <small>JUJUTSU KAISEN</small>
         </div>
         <div className="wallpaper-featured__content">
           <p className="eyebrow">Pronto para usar</p>
           <h2>Toji Fushiguro JJK</h2>
-          <span>Vídeo mobile · 2,4 MB · animação em loop</span>
-          <div className="wallpaper-featured__actions">
-            <a className="button button-secondary" href={TOJI_DOWNLOAD_URL} target="_blank" rel="noreferrer">
-              <Download size={17} /> 1. Baixar MP4
-            </a>
-            <button className="button button-primary" type="button" disabled={loading || saving} onClick={() => inputRef.current?.click()}>
-              <Upload size={17} /> 2. Aplicar
-            </button>
-          </div>
-          <a className="wallpaper-featured__source" href={TOJI_SOURCE_URL} target="_blank" rel="noreferrer">
-            Ver página e créditos <ExternalLink size={13} />
-          </a>
+          <span>Incluído no app · 2,4 MB · animação em loop</span>
+          <button className="button button-primary wallpaper-featured__apply" type="button" disabled={loading || saving || tojiIsActive} onClick={() => void applyToji()}>
+            {tojiIsActive ? <Check size={18} /> : <Sparkles size={18} />}
+            {saving ? 'Aplicando…' : tojiIsActive ? 'Toji aplicado' : 'Aplicar Toji'}
+          </button>
+          <a className="wallpaper-featured__source" href={TOJI_SOURCE_URL} target="_blank" rel="noreferrer">Créditos da animação</a>
         </div>
       </article>
 
-      <p className="wallpaper-featured__hint"><Info size={16} /> No iPhone, baixe o MP4, toque em <strong>Aplicar</strong> e selecione-o em Downloads. O MeuTreino salva uma cópia offline neste aparelho.</p>
+      <p className="wallpaper-featured__hint"><Info size={16} /><span>O Toji já vem no MeuTreino. Basta tocar em <strong>Aplicar Toji</strong>; nenhum download manual é necessário.</span></p>
 
       {asset ? (
         <div className="wallpaper-current">
