@@ -94,6 +94,8 @@ export interface Preferences {
 
 export interface AppState {
   schemaVersion: typeof APP_STATE_SCHEMA_VERSION;
+  /** Marks one-time installation of the bundled weekly plans on existing devices. */
+  starterPlanVersion?: number;
   plans: WorkoutPlan[];
   history: WorkoutHistory[];
   activeWorkout: ActiveWorkout | null;

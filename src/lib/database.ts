@@ -10,6 +10,7 @@ import {
   type WorkoutPlan,
   type WorkoutSetHistory,
 } from '../types';
+import { createWeeklyWorkoutPlans, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION } from './starterPlans';
 
 const DATABASE_NAME = 'meutreino';
 const DATABASE_VERSION = 1;
@@ -244,6 +245,9 @@ export function validateAppState(value: unknown): AppState {
   if (value.schemaVersion !== APP_STATE_SCHEMA_VERSION) {
     issues.push(`schemaVersion incompatível (esperado ${APP_STATE_SCHEMA_VERSION})`);
   }
+  if (value.starterPlanVersion !== undefined && value.starterPlanVersion !== STARTER_PLAN_VERSION) {
+    issues.push(`starterPlanVersion incompatível (esperado ${STARTER_PLAN_VERSION})`);
+  }
   if (!Array.isArray(value.plans)) {
     issues.push('plans deve ser uma lista');
   } else {
@@ -269,32 +273,8 @@ function cloneState(state: AppState): AppState {
 export function createSeedState(now = new Date().toISOString()): AppState {
   return {
     schemaVersion: APP_STATE_SCHEMA_VERSION,
-    plans: [
-      {
-        id: 'plan-treino-a',
-        name: 'Treino A',
-        notes: 'Peito, ombros e tríceps',
-        createdAt: now,
-        updatedAt: now,
-        exercises: [
-          { id: 'exercise-supino-reto', name: 'Supino reto', targetSets: 4, targetReps: 8, restSeconds: 90 },
-          { id: 'exercise-desenvolvimento', name: 'Desenvolvimento', targetSets: 3, targetReps: 10, restSeconds: 75 },
-          { id: 'exercise-triceps-pulley', name: 'Tríceps pulley', targetSets: 3, targetReps: 12, restSeconds: 60 },
-        ],
-      },
-      {
-        id: 'plan-treino-b',
-        name: 'Treino B',
-        notes: 'Pernas, costas e bíceps',
-        createdAt: now,
-        updatedAt: now,
-        exercises: [
-          { id: 'exercise-agachamento', name: 'Agachamento', targetSets: 4, targetReps: 8, restSeconds: 120 },
-          { id: 'exercise-puxada-frontal', name: 'Puxada frontal', targetSets: 3, targetReps: 10, restSeconds: 90 },
-          { id: 'exercise-rosca-direta', name: 'Rosca direta', targetSets: 3, targetReps: 12, restSeconds: 60 },
-        ],
-      },
-    ],
+    starterPlanVersion: STARTER_PLAN_VERSION,
+    plans: createWeeklyWorkoutPlans(now),
     history: [],
     activeWorkout: null,
     preferences: {
@@ -355,7 +335,12 @@ export async function loadState(): Promise<AppState> {
   const database = await openDatabase();
   try {
     const stored = await readRecord(database);
-    if (stored) return cloneState(validateAppState(stored.value));
+    if (stored) {
+      const validated = validateAppState(stored.value);
+      const upgraded = installWeeklyWorkoutPlans(validated);
+      if (upgraded !== validated) await writeRecord(database, upgraded);
+      return cloneState(upgraded);
+    }
 
     const seeded = createSeedState();
     await writeRecord(database, seeded);
@@ -366,7 +351,9 @@ export async function loadState(): Promise<AppState> {
 }
 
 export async function saveState(state: AppState): Promise<AppState> {
-  const next = cloneState(validateAppState({ ...state, updatedAt: new Date().toISOString() }));
+  const timestamp = new Date().toISOString();
+  const validated = validateAppState({ ...state, updatedAt: timestamp });
+  const next = cloneState(installWeeklyWorkoutPlans(validated, timestamp));
   const database = await openDatabase();
   try {
     await writeRecord(database, next);

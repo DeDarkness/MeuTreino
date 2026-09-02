@@ -1,6 +1,7 @@
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Dumbbell, Play, Plus } from 'lucide-react';
 
 import { formatDate, formatDuration, greeting, todayLabel } from '../lib/format';
+import { getSuggestedPlanId } from '../lib/starterPlans';
 import type { ActiveWorkout, WorkoutHistory, WorkoutPlan } from '../types';
 
 type HomeScreenProps = {
@@ -28,8 +29,12 @@ export function HomeScreen({
     (left, right) => Date.parse(right.finishedAt) - Date.parse(left.finishedAt),
   );
   const lastWorkout = sortedHistory[0];
+  const todayPlanId = getSuggestedPlanId();
   const suggestedPlan =
-    plans.find((plan) => plan.id !== lastWorkout?.planId) ?? plans.find((plan) => plan.id === lastWorkout?.planId) ?? plans[0];
+    plans.find((plan) => plan.id === todayPlanId)
+    ?? plans.find((plan) => plan.id !== lastWorkout?.planId)
+    ?? plans.find((plan) => plan.id === lastWorkout?.planId)
+    ?? plans[0];
   const weekStart = new Date();
   weekStart.setHours(0, 0, 0, 0);
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
@@ -66,7 +71,7 @@ export function HomeScreen({
       ) : suggestedPlan ? (
         <article className="hero-card workout-hero">
           <div className="hero-icon"><Dumbbell size={29} /></div>
-          <p className="eyebrow">Próximo treino</p>
+          <p className="eyebrow">{suggestedPlan.id === todayPlanId ? 'Treino de hoje' : 'Próximo treino'}</p>
           <h2>{suggestedPlan.name}</h2>
           <p>{suggestedPlan.notes || `${suggestedPlan.exercises.length} exercícios para hoje`}</p>
           <div className="hero-meta">
