@@ -1,0 +1,172 @@
+.workout-summary-backdrop {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
+  place-items: center;
+  overflow-y: auto;
+  background: rgba(3, 5, 4, 0.86);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+.workout-summary-dialog {
+  position: relative;
+  width: min(100%, 480px);
+  max-height: calc(100dvh - 36px);
+  padding: 24px;
+  overflow: auto;
+  border: 1px solid rgba(166, 240, 51, 0.24);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% -10%, rgba(166, 240, 51, 0.15), transparent 34%),
+    #111612;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.68);
+  animation: workout-summary-in 320ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+@keyframes workout-summary-in {
+  from { opacity: 0; transform: translateY(22px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.workout-summary-close {
+  position: absolute;
+  z-index: 2;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  color: #a6afa6;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+.workout-summary-close svg { width: 20px; }
+
+.workout-summary-hero {
+  display: flex;
+  padding: 10px 38px 18px;
+  align-items: center;
+  flex-direction: column;
+  text-align: center;
+}
+
+.workout-summary-hero > span {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  margin-bottom: 14px;
+  place-items: center;
+  border-radius: 22px;
+  color: #101607;
+  background: #a6f033;
+  box-shadow: 0 0 42px rgba(166, 240, 51, 0.2);
+}
+
+.workout-summary-hero > span svg { width: 32px; height: 32px; }
+.workout-summary-hero p { margin: 0 0 5px; color: #a6f033; font-size: 0.62rem; font-weight: 900; letter-spacing: 0.14em; }
+.workout-summary-hero h2 { margin: 0; font-size: clamp(1.8rem, 9vw, 2.35rem); letter-spacing: -0.05em; }
+.workout-summary-hero > strong { margin-top: 5px; color: #a6afa6; font-size: 0.82rem; }
+
+.workout-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workout-summary-stats article {
+  display: flex;
+  min-width: 0;
+  min-height: 96px;
+  padding: 10px 5px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  text-align: center;
+}
+
+.workout-summary-stats article > span { color: #a6f033; }
+.workout-summary-stats svg { width: 18px; }
+.workout-summary-stats strong { max-width: 100%; overflow: hidden; font-size: 0.83rem; text-overflow: ellipsis; white-space: nowrap; }
+.workout-summary-stats small { color: #838d84; font-size: 0.57rem; }
+
+.workout-summary-records {
+  display: flex;
+  margin-top: 12px;
+  padding: 14px;
+  flex-direction: column;
+  gap: 9px;
+  border: 1px solid rgba(255, 203, 102, 0.18);
+  border-radius: 17px;
+  color: #d4c59f;
+  background: rgba(255, 203, 102, 0.055);
+}
+
+.workout-summary-records > div { display: flex; align-items: center; gap: 7px; color: #ffcf69; font-size: 0.76rem; }
+.workout-summary-records > span { display: flex; align-items: center; gap: 6px; font-size: 0.65rem; }
+.workout-summary-records > span svg { width: 14px; color: #ffcf69; }
+
+.workout-summary-insights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.workout-summary-insights > div {
+  display: grid;
+  min-width: 0;
+  padding: 12px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.workout-summary-insights svg { width: 18px; grid-row: span 2; color: #a6f033; }
+.workout-summary-insights span { overflow: hidden; color: #838d84; font-size: 0.57rem; text-overflow: ellipsis; white-space: nowrap; }
+.workout-summary-insights strong { overflow: hidden; font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
+
+.workout-summary-note { margin: 12px 0 0; padding: 11px 13px; border-left: 3px solid #a6f033; border-radius: 0 12px 12px 0; color: #a6afa6; background: rgba(255, 255, 255, 0.025); font-size: 0.68rem; line-height: 1.45; }
+
+.workout-summary-actions { display: grid; grid-template-columns: 1.25fr 1fr; gap: 8px; margin-top: 15px; }
+.workout-summary-actions button { display: flex; min-height: 48px; padding: 0 12px; align-items: center; justify-content: center; gap: 7px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; color: #f4f7f2; background: #1b221c; font-size: 0.7rem; font-weight: 850; cursor: pointer; }
+.workout-summary-actions button.is-primary { border-color: #a6f033; color: #0b1106; background: #a6f033; }
+
+.workout-summary-confetti i { position: absolute; top: 55px; width: 7px; height: 13px; border-radius: 2px; background: #a6f033; animation: summary-confetti 2.2s ease-in-out infinite; }
+.workout-summary-confetti i:nth-child(1) { left: 12%; animation-delay: -0.2s; transform: rotate(17deg); }
+.workout-summary-confetti i:nth-child(2) { left: 25%; background: #4ef2d0; animation-delay: -1.1s; }
+.workout-summary-confetti i:nth-child(3) { left: 39%; background: #ffcb66; animation-delay: -0.6s; }
+.workout-summary-confetti i:nth-child(4) { right: 38%; background: #9074ff; animation-delay: -1.5s; }
+.workout-summary-confetti i:nth-child(5) { right: 24%; background: #4ef2d0; animation-delay: -0.35s; }
+.workout-summary-confetti i:nth-child(6) { right: 11%; background: #ffcb66; animation-delay: -1.25s; }
+
+@keyframes summary-confetti {
+  0%, 100% { opacity: 0; translate: 0 -16px; rotate: 0deg; }
+  20%, 65% { opacity: 1; }
+  80% { opacity: 0; translate: 7px 65px; rotate: 190deg; }
+}
+
+@media (max-width: 390px) {
+  .workout-summary-dialog { padding: 19px 15px; border-radius: 23px; }
+  .workout-summary-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workout-summary-stats article { min-height: 76px; }
+  .workout-summary-actions { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workout-summary-confetti { display: none; }
+  .workout-summary-dialog { animation: none; }
+}

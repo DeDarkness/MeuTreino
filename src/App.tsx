@@ -5,6 +5,7 @@ import { ActiveWorkoutDock } from './components/ActiveWorkoutDock';
 import { BottomNav, type AppTab } from './components/BottomNav';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { WallpaperBackdrop } from './components/WallpaperBackdrop';
+import { WorkoutSummaryDialog } from './components/WorkoutSummaryDialog';
 import { useWallpaper } from './hooks/useWallpaper';
 import { useRestAlert } from './hooks/useRestAlert';
 import { useWorkoutStore } from './hooks/useWorkoutStore';
@@ -15,7 +16,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { PlansScreen } from './screens/PlansScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { WallpaperScreen } from './screens/WallpaperScreen';
-import type { ActiveWorkoutSet, WorkoutPlan } from './types';
+import type { ActiveWorkoutSet, WorkoutHistory, WorkoutPlan } from './types';
 
 type NavigatorWithStandalone = Navigator & { standalone?: boolean };
 
@@ -27,6 +28,7 @@ export default function App() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [storagePersistent, setStoragePersistent] = useState<boolean | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<RestNotificationPermission>(() => getRestNotificationPermission());
+  const [completedSummary, setCompletedSummary] = useState<WorkoutHistory | null>(null);
   const runAction = (operation: Promise<unknown>) => { void operation.catch(() => undefined); };
 
   useEffect(() => {
@@ -53,13 +55,13 @@ export default function App() {
   useRestAlert(activeWorkout, state?.preferences ?? null, store.skipRest);
   const completedSets = useMemo(
     () => activeWorkout?.exercises.reduce(
-      (total, exercise) => total + exercise.sets.filter((set) => set.completed).length,
+      (total, exercise) => total + (exercise.skipped ? 0 : exercise.sets.filter((set) => set.completed).length),
       0,
     ) ?? 0,
     [activeWorkout],
   );
   const totalSets = useMemo(
-    () => activeWorkout?.exercises.reduce((total, exercise) => total + exercise.sets.length, 0) ?? 0,
+    () => activeWorkout?.exercises.reduce((total, exercise) => total + (exercise.skipped ? 0 : exercise.sets.length), 0) ?? 0,
     [activeWorkout],
   );
   const showIosInstallPrompt = useMemo(() => {
@@ -176,7 +178,7 @@ export default function App() {
             const exercise = activeWorkout.exercises[exerciseIndex];
             const set = exercise?.sets[setIndex];
             if (!exercise || !set) return;
-            runAction(store.updateSet(exercise.exerciseId, set.id, patch as Partial<Pick<ActiveWorkoutSet, 'reps' | 'weight'>>));
+            runAction(store.updateSet(exercise.exerciseId, set.id, patch as Partial<Pick<ActiveWorkoutSet, 'reps' | 'weight' | 'rir'>>));
           }}
           onSelectSet={(exerciseIndex, setIndex) => {
             const exercise = activeWorkout.exercises[exerciseIndex];
@@ -190,6 +192,28 @@ export default function App() {
             if (!exercise || !set) return;
             runAction(store.completeSet(exercise.exerciseId, set.id));
           }}
+          onUncompleteSet={(exerciseIndex, setIndex) => {
+            const exercise = activeWorkout.exercises[exerciseIndex];
+            const set = exercise?.sets[setIndex];
+            if (!exercise || !set) return;
+            runAction(store.uncompleteSet(exercise.exerciseId, set.id));
+          }}
+          onMoveExercise={(exerciseIndex, direction) => {
+            const exercise = activeWorkout.exercises[exerciseIndex];
+            if (!exercise) return;
+            runAction(store.moveExercise(exercise.exerciseId, direction));
+          }}
+          onDeferExercise={(exerciseIndex) => {
+            const exercise = activeWorkout.exercises[exerciseIndex];
+            if (!exercise) return;
+            runAction(store.deferExercise(exercise.exerciseId));
+          }}
+          onToggleSkipExercise={(exerciseIndex) => {
+            const exercise = activeWorkout.exercises[exerciseIndex];
+            if (!exercise) return;
+            runAction(store.toggleSkipExercise(exercise.exerciseId));
+          }}
+          onUpdateNotes={(notes) => runAction(store.updateWorkoutNotes(notes))}
           onSkipRest={() => runAction(store.skipRest())}
           onAddRest={(seconds) => runAction(store.addRestSeconds(seconds))}
           onFinish={() => {
@@ -198,9 +222,10 @@ export default function App() {
               return;
             }
             if (completedSets < totalSets && !window.confirm(`Você concluiu ${completedSets} de ${totalSets} séries. Finalizar e salvar mesmo assim?`)) return;
-            void store.finishWorkout().then(() => {
+            void store.finishWorkout().then((saved) => {
               setShowActiveWorkout(false);
               setActiveTab('history');
+              setCompletedSummary(saved);
             }).catch(() => undefined);
           }}
           onAbandon={() => {
@@ -308,6 +333,15 @@ export default function App() {
         />
       ) : null}
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+      {completedSummary ? (
+        <WorkoutSummaryDialog
+          workout={completedSummary}
+          previousHistory={state.history.filter((item) => item.id !== completedSummary.id)}
+          weightUnit={state.preferences.weightUnit}
+          onClose={() => setCompletedSummary(null)}
+          onViewProgress={() => { setCompletedSummary(null); setActiveTab('history'); }}
+        />
+      ) : null}
       <UpdatePrompt />
     </div>
   );

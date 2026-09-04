@@ -65,10 +65,10 @@ export function HomeScreen({
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
   const thisWeek = history.filter((item) => Date.parse(item.finishedAt) >= weekStart.getTime());
   const completed = activeWorkout?.exercises.reduce(
-    (total, item) => total + item.sets.filter((set) => set.completed).length,
+    (total, item) => total + (item.skipped ? 0 : item.sets.filter((set) => set.completed).length),
     0,
   ) ?? 0;
-  const total = activeWorkout?.exercises.reduce((sum, item) => sum + item.sets.length, 0) ?? 0;
+  const total = activeWorkout?.exercises.reduce((sum, item) => sum + (item.skipped ? 0 : item.sets.length), 0) ?? 0;
   const selectedWorkoutIsActive = Boolean(activeWorkout && activeWorkout.planId === selectedPlan?.id);
   const anotherWorkoutIsActive = Boolean(activeWorkout && !selectedWorkoutIsActive);
 

@@ -4,10 +4,15 @@ import { createSeedState, validateAppState } from './database';
 import {
   addRestTime,
   completeActiveSet,
+  deferActiveExercise,
   finishActiveWorkout,
+  moveActiveExercise,
   selectActiveSet,
   startWorkoutFromPlan,
+  toggleSkipActiveExercise,
+  uncompleteActiveSet,
   updateActiveSet,
+  updateActiveWorkoutNotes,
 } from './workout';
 import type { AppState } from '../types';
 
@@ -96,6 +101,53 @@ describe('sessão de treino', () => {
       restEndsAt: '2026-09-01T12:02:10.000Z',
     });
     expect(edited.activeWorkout?.exercises[1].sets[2]).toMatchObject({ reps: 9, weight: 87.5 });
+  });
+
+  it('salva RIR, anotação e permite desfazer uma série concluída', () => {
+    const seed = createSeedState(startedAt);
+    const started = startWorkoutFromPlan(seed, 'plan-segunda', startedAt).state;
+    const exercise = started.activeWorkout!.exercises[0];
+    const set = exercise.sets[0];
+    const withRir = updateActiveSet(started, exercise.exerciseId, set.id, { rir: 2 });
+    const withNotes = updateActiveWorkoutNotes(withRir, 'Execução controlada.');
+    const completed = completeActiveSet(withNotes, exercise.exerciseId, set.id, new Date('2026-09-01T12:01:00.000Z'));
+    const finished = finishActiveWorkout(completed, new Date('2026-09-01T12:30:00.000Z'));
+    const undone = uncompleteActiveSet(completed, exercise.exerciseId, set.id);
+
+    expect(finished.history.notes).toBe('Execução controlada.');
+    expect(finished.history.exercises[0].sets[0].rir).toBe(2);
+    expect(undone.activeWorkout?.notes).toBe('Execução controlada.');
+    expect(undone.activeWorkout?.exercises[0].sets[0]).toMatchObject({ rir: 2, completed: false, completedAt: null });
+  });
+
+  it('alterna exercícios de uma supersérie e só descansa ao fechar a rodada', () => {
+    const seed = createSeedState(startedAt);
+    seed.plans[0].exercises[0].supersetGroup = 'A';
+    seed.plans[0].exercises[1].supersetGroup = 'A';
+    const started = startWorkoutFromPlan(seed, 'plan-segunda', startedAt).state;
+    const first = started.activeWorkout!.exercises[0];
+    const second = started.activeWorkout!.exercises[1];
+    const afterFirst = completeActiveSet(started, first.exerciseId, first.sets[0].id, new Date('2026-09-01T12:00:10.000Z'));
+    expect(afterFirst.activeWorkout).toMatchObject({ currentExerciseIndex: 1, currentSetIndex: 0, restEndsAt: null });
+
+    const afterSecond = completeActiveSet(afterFirst, second.exerciseId, second.sets[0].id, new Date('2026-09-01T12:00:20.000Z'));
+    expect(afterSecond.activeWorkout).toMatchObject({ currentExerciseIndex: 0, currentSetIndex: 1, restEndsAt: '2026-09-01T12:01:50.000Z' });
+  });
+
+  it('permite reordenar, deixar para depois e pular um exercício vazio', () => {
+    const seed = createSeedState(startedAt);
+    const started = startWorkoutFromPlan(seed, 'plan-segunda', startedAt).state;
+    const firstId = started.activeWorkout!.exercises[0].exerciseId;
+    const moved = moveActiveExercise(started, firstId, 1);
+    expect(moved.activeWorkout?.exercises[1].exerciseId).toBe(firstId);
+
+    const deferred = deferActiveExercise(moved, firstId);
+    expect(deferred.activeWorkout?.exercises.at(-1)?.exerciseId).toBe(firstId);
+    expect(deferred.activeWorkout?.currentExerciseIndex).toBe(1);
+
+    const current = deferred.activeWorkout!.exercises[deferred.activeWorkout!.currentExerciseIndex];
+    const skipped = toggleSkipActiveExercise(deferred, current.exerciseId);
+    expect(skipped.activeWorkout?.exercises.find((exercise) => exercise.exerciseId === current.exerciseId)?.skipped).toBe(true);
   });
 });
 

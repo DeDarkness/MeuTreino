@@ -16,7 +16,7 @@ export interface WorkoutPlanInput {
   exercises: ExerciseInput[];
 }
 
-export type ActiveSetPatch = Partial<Pick<ActiveWorkoutSet, 'reps' | 'weight'>>;
+export type ActiveSetPatch = Partial<Pick<ActiveWorkoutSet, 'reps' | 'weight' | 'rir'>>;
 
 export function createWorkoutId(prefix: string): string {
   const uuid = globalThis.crypto?.randomUUID?.();
@@ -128,6 +128,7 @@ export function startWorkoutFromPlan(
         exerciseName: exercise.name,
         restSeconds: exercise.restSeconds,
         ...(exercise.notes ? { notes: exercise.notes } : {}),
+        ...(exercise.supersetGroup ? { supersetGroup: exercise.supersetGroup } : {}),
         sets: Array.from({ length: exercise.targetSets }, (_, index) => {
           const setNumber = index + 1;
           const previous = previousSets.get(setNumber);
@@ -139,6 +140,7 @@ export function startWorkoutFromPlan(
             weight: previous?.weight ?? null,
             completed: false,
             completedAt: null,
+            rir: null,
           };
         }),
       };
@@ -161,6 +163,10 @@ export function updateActiveSet(
   if (patch.weight !== undefined && patch.weight !== null &&
       (!Number.isFinite(patch.weight) || patch.weight < 0)) {
     throw new Error('A carga deve ser um número não negativo.');
+  }
+  if (patch.rir !== undefined && patch.rir !== null &&
+      (!Number.isInteger(patch.rir) || patch.rir < 0 || patch.rir > 4)) {
+    throw new Error('O RIR deve estar entre 0 e 4.');
   }
 
   let found = false;
@@ -211,7 +217,25 @@ export function selectActiveSet(
 }
 
 function findNextPending(workout: ActiveWorkout, afterExercise: number, afterSet: number) {
+  const currentExercise = workout.exercises[afterExercise];
+  const group = currentExercise?.supersetGroup;
+  if (group && !currentExercise.skipped) {
+    const groupedTasks = Array.from(
+      { length: Math.max(...workout.exercises.filter((exercise) => exercise.supersetGroup === group && !exercise.skipped).map((exercise) => exercise.sets.length), 0) },
+      (_, round) => workout.exercises.flatMap((exercise, exerciseIndex) =>
+        exercise.supersetGroup === group && !exercise.skipped && exercise.sets[round]
+          ? [{ exerciseIndex, setIndex: round }]
+          : []),
+    ).flat();
+    const currentTask = groupedTasks.findIndex((task) => task.exerciseIndex === afterExercise && task.setIndex === afterSet);
+    for (let offset = 1; offset <= groupedTasks.length; offset += 1) {
+      const candidate = groupedTasks[(Math.max(currentTask, -1) + offset) % groupedTasks.length];
+      if (candidate && !workout.exercises[candidate.exerciseIndex].sets[candidate.setIndex].completed) return candidate;
+    }
+  }
+
   for (let exerciseIndex = afterExercise; exerciseIndex < workout.exercises.length; exerciseIndex += 1) {
+    if (workout.exercises[exerciseIndex].skipped) continue;
     const startSet = exerciseIndex === afterExercise ? afterSet + 1 : 0;
     for (let setIndex = startSet; setIndex < workout.exercises[exerciseIndex].sets.length; setIndex += 1) {
       if (!workout.exercises[exerciseIndex].sets[setIndex].completed) {
@@ -220,12 +244,24 @@ function findNextPending(workout: ActiveWorkout, afterExercise: number, afterSet
     }
   }
   for (let exerciseIndex = 0; exerciseIndex <= afterExercise; exerciseIndex += 1) {
+    if (workout.exercises[exerciseIndex].skipped) continue;
     const endSet = exerciseIndex === afterExercise ? afterSet : workout.exercises[exerciseIndex].sets.length;
     for (let setIndex = 0; setIndex < endSet; setIndex += 1) {
       if (!workout.exercises[exerciseIndex].sets[setIndex].completed) {
         return { exerciseIndex, setIndex };
       }
     }
+  }
+  return null;
+}
+
+function findFirstPendingFrom(workout: ActiveWorkout, startExercise: number) {
+  for (let offset = 0; offset < workout.exercises.length; offset += 1) {
+    const exerciseIndex = (startExercise + offset) % workout.exercises.length;
+    const exercise = workout.exercises[exerciseIndex];
+    if (exercise.skipped) continue;
+    const setIndex = exercise.sets.findIndex((set) => !set.completed);
+    if (setIndex >= 0) return { exerciseIndex, setIndex };
   }
   return null;
 }
@@ -255,7 +291,14 @@ export function completeActiveSet(
       });
   const updatedWorkout: ActiveWorkout = { ...workout, exercises, updatedAt: now };
   const next = findNextPending(updatedWorkout, exerciseIndex, setIndex);
-  const restSeconds = updatedWorkout.exercises[exerciseIndex].restSeconds;
+  const completedExercise = updatedWorkout.exercises[exerciseIndex];
+  const nextExercise = next ? updatedWorkout.exercises[next.exerciseIndex] : null;
+  const continuesSupersetRound = Boolean(
+    completedExercise.supersetGroup
+    && completedExercise.supersetGroup === nextExercise?.supersetGroup
+    && next?.setIndex === setIndex,
+  );
+  const restSeconds = continuesSupersetRound ? 0 : completedExercise.restSeconds;
 
   return {
     ...state,
@@ -269,6 +312,136 @@ export function completeActiveSet(
         : null,
       restDurationSeconds: next && restSeconds > 0 ? restSeconds : null,
     },
+    updatedAt: now,
+  };
+}
+
+export function uncompleteActiveSet(
+  state: AppState,
+  exerciseId: string,
+  setId: string,
+  now = new Date().toISOString(),
+): AppState {
+  const workout = state.activeWorkout;
+  if (!workout) throw new Error('Nenhum treino está em andamento.');
+  const exerciseIndex = workout.exercises.findIndex((exercise) => exercise.exerciseId === exerciseId);
+  const setIndex = exerciseIndex >= 0
+    ? workout.exercises[exerciseIndex].sets.findIndex((set) => set.id === setId)
+    : -1;
+  if (exerciseIndex < 0 || setIndex < 0) throw new Error('Série não encontrada.');
+
+  const exercises = workout.exercises.map((exercise, index) => index !== exerciseIndex
+    ? exercise
+    : {
+        ...exercise,
+        skipped: false,
+        sets: exercise.sets.map((set, indexInExercise) => indexInExercise === setIndex
+          ? { ...set, completed: false, completedAt: null }
+          : set),
+      });
+  return {
+    ...state,
+    activeWorkout: {
+      ...workout,
+      exercises,
+      currentExerciseIndex: exerciseIndex,
+      currentSetIndex: setIndex,
+      updatedAt: now,
+    },
+    updatedAt: now,
+  };
+}
+
+export function moveActiveExercise(
+  state: AppState,
+  exerciseId: string,
+  direction: -1 | 1,
+  now = new Date().toISOString(),
+): AppState {
+  const workout = state.activeWorkout;
+  if (!workout) throw new Error('Nenhum treino está em andamento.');
+  const source = workout.exercises.findIndex((exercise) => exercise.exerciseId === exerciseId);
+  const destination = source + direction;
+  if (source < 0) throw new Error('Exercício não encontrado.');
+  if (destination < 0 || destination >= workout.exercises.length) return state;
+  const currentExerciseId = workout.exercises[workout.currentExerciseIndex].exerciseId;
+  const currentSetId = workout.exercises[workout.currentExerciseIndex].sets[workout.currentSetIndex].id;
+  const exercises = [...workout.exercises];
+  [exercises[source], exercises[destination]] = [exercises[destination], exercises[source]];
+  const currentExerciseIndex = exercises.findIndex((exercise) => exercise.exerciseId === currentExerciseId);
+  const currentSetIndex = exercises[currentExerciseIndex].sets.findIndex((set) => set.id === currentSetId);
+  return {
+    ...state,
+    activeWorkout: { ...workout, exercises, currentExerciseIndex, currentSetIndex, updatedAt: now },
+    updatedAt: now,
+  };
+}
+
+export function deferActiveExercise(
+  state: AppState,
+  exerciseId: string,
+  now = new Date().toISOString(),
+): AppState {
+  const workout = state.activeWorkout;
+  if (!workout) throw new Error('Nenhum treino está em andamento.');
+  const source = workout.exercises.findIndex((exercise) => exercise.exerciseId === exerciseId);
+  if (source < 0) throw new Error('Exercício não encontrado.');
+  if (source === workout.exercises.length - 1) return state;
+  const exercises = [...workout.exercises];
+  const [deferred] = exercises.splice(source, 1);
+  exercises.push(deferred);
+  const reordered = { ...workout, exercises };
+  const next = findFirstPendingFrom(reordered, source);
+  return {
+    ...state,
+    activeWorkout: {
+      ...reordered,
+      currentExerciseIndex: next?.exerciseIndex ?? exercises.length - 1,
+      currentSetIndex: next?.setIndex ?? 0,
+      updatedAt: now,
+    },
+    updatedAt: now,
+  };
+}
+
+export function toggleSkipActiveExercise(
+  state: AppState,
+  exerciseId: string,
+  now = new Date().toISOString(),
+): AppState {
+  const workout = state.activeWorkout;
+  if (!workout) throw new Error('Nenhum treino está em andamento.');
+  const exerciseIndex = workout.exercises.findIndex((exercise) => exercise.exerciseId === exerciseId);
+  if (exerciseIndex < 0) throw new Error('Exercício não encontrado.');
+  const exercise = workout.exercises[exerciseIndex];
+  const skipping = !exercise.skipped;
+  if (skipping && exercise.sets.some((set) => set.completed)) {
+    throw new Error('Use “Fazer depois” em exercícios que já têm séries concluídas.');
+  }
+  const exercises = workout.exercises.map((item, index) => index === exerciseIndex ? { ...item, skipped: skipping } : item);
+  const updated = { ...workout, exercises };
+  const next = skipping ? findNextPending(updated, exerciseIndex, -1) : null;
+  return {
+    ...state,
+    activeWorkout: {
+      ...updated,
+      currentExerciseIndex: next?.exerciseIndex ?? workout.currentExerciseIndex,
+      currentSetIndex: next?.setIndex ?? workout.currentSetIndex,
+      updatedAt: now,
+    },
+    updatedAt: now,
+  };
+}
+
+export function updateActiveWorkoutNotes(
+  state: AppState,
+  notes: string,
+  now = new Date().toISOString(),
+): AppState {
+  if (!state.activeWorkout) throw new Error('Nenhum treino está em andamento.');
+  return {
+    ...state,
+    activeWorkout: { ...state.activeWorkout, notes: notes.slice(0, 1000), updatedAt: now },
     updatedAt: now,
   };
 }
@@ -336,9 +509,11 @@ export function finishActiveWorkout(
             reps: set.reps,
             weight: set.weight,
             completedAt: set.completedAt ?? finishedAt,
+            ...(set.rir !== undefined ? { rir: set.rir } : {}),
           })),
       }))
       .filter((exercise) => exercise.sets.length > 0),
+    ...(workout.notes?.trim() ? { notes: workout.notes.trim() } : {}),
   };
   return {
     state: {

@@ -1057,6 +1057,46 @@ svg {
 .record-card span { overflow: hidden; color: var(--muted); font-size: 0.59rem; text-overflow: ellipsis; white-space: nowrap; }
 .record-card strong { overflow: hidden; font-size: 0.82rem; text-overflow: ellipsis; white-space: nowrap; }
 
+.training-calendar {
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 21px;
+  background: var(--surface);
+}
+
+.training-calendar__heading,
+.training-calendar__heading > div:first-child,
+.training-calendar__streak {
+  display: flex;
+  align-items: center;
+}
+
+.training-calendar__heading { justify-content: space-between; gap: 12px; margin-bottom: 15px; }
+.training-calendar__heading > div:first-child { gap: 10px; }
+.training-calendar__heading > div:first-child > svg { color: var(--accent); }
+.training-calendar__heading span { color: var(--accent); font-size: 0.55rem; font-weight: 900; letter-spacing: 0.1em; }
+.training-calendar__heading h2 { margin: 2px 0 0; font-size: 1rem; letter-spacing: -0.025em; }
+.training-calendar__streak { padding: 7px 9px; gap: 4px; border-radius: 12px; color: var(--warning); background: rgba(255, 203, 102, 0.07); }
+.training-calendar__streak svg { color: var(--warning); }
+.training-calendar__streak strong { font-size: 0.88rem; }
+.training-calendar__streak span { color: #b6a47f; font-size: 0.52rem; letter-spacing: 0; }
+
+.training-calendar__weekdays,
+.training-calendar__days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.training-calendar__weekdays { margin-bottom: 5px; color: var(--muted); font-size: 0.56rem; font-weight: 800; text-align: center; }
+.training-calendar__days > span { position: relative; display: grid; aspect-ratio: 1; place-items: center; border-radius: 10px; color: var(--muted); background: rgba(255, 255, 255, 0.025); font-size: 0.65rem; font-weight: 750; }
+.training-calendar__days > span.is-empty { background: transparent; }
+.training-calendar__days > span.is-trained { color: #0a1105; background: var(--accent); font-weight: 950; }
+.training-calendar__days > span.is-today { box-shadow: inset 0 0 0 1px var(--accent); }
+.training-calendar__days > span.is-trained i { position: absolute; right: 3px; bottom: 3px; width: 3px; height: 3px; border-radius: 50%; background: #0a1105; }
+.training-calendar > p { margin: 13px 0 0; color: var(--muted); font-size: 0.64rem; text-align: center; }
+.training-calendar > p strong { color: var(--text); }
+
 .load-suggestions__heading h2 { margin: 0; font-size: 1.2rem; letter-spacing: -0.03em; }
 .load-suggestions__heading p { margin: 6px 0 0; color: var(--muted); font-size: 0.74rem; line-height: 1.45; }
 .load-suggestion-list { display: flex; flex-direction: column; gap: 9px; }
@@ -1102,6 +1142,7 @@ svg {
 .has-wallpaper .evolution-tabs,
 .has-wallpaper .evolution-chart-card,
 .has-wallpaper .record-card,
+.has-wallpaper .training-calendar,
 .has-wallpaper .load-suggestion-list article { background-color: rgba(11, 16, 12, 0.72); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 
 .history-list {
@@ -1180,6 +1221,17 @@ svg {
   gap: 18px;
   padding: 2px 16px 16px;
   border-top: 1px solid var(--line-soft);
+}
+
+.history-session-note {
+  margin: 14px 0 -4px;
+  padding: 11px 12px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 11px 11px 0;
+  color: var(--muted-strong);
+  background: var(--accent-faint);
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
 .history-exercise {

@@ -11,6 +11,8 @@ export interface Exercise {
   targetReps: number;
   restSeconds: number;
   notes?: string;
+  /** Exercises sharing the same label alternate set-by-set during the workout. */
+  supersetGroup?: string;
 }
 
 export interface WorkoutPlan {
@@ -29,6 +31,8 @@ export interface WorkoutSetHistory {
   reps: number;
   weight: number | null;
   completedAt: IsoDateString;
+  /** Repetitions in reserve reported after the set, from 0 to 4. */
+  rir?: number | null;
 }
 
 export interface WorkoutExerciseHistory {
@@ -56,6 +60,7 @@ export interface ActiveWorkoutSet {
   weight: number | null;
   completed: boolean;
   completedAt: IsoDateString | null;
+  rir?: number | null;
 }
 
 export interface ActiveWorkoutExercise {
@@ -63,6 +68,8 @@ export interface ActiveWorkoutExercise {
   exerciseName: string;
   restSeconds: number;
   notes?: string;
+  supersetGroup?: string;
+  skipped?: boolean;
   sets: ActiveWorkoutSet[];
 }
 
@@ -82,6 +89,7 @@ export interface ActiveWorkout {
   restEndsAt: IsoDateString | null;
   restDurationSeconds: number | null;
   exercises: ActiveWorkoutExercise[];
+  notes?: string;
 }
 
 export interface Preferences {

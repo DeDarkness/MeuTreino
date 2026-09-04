@@ -76,6 +76,9 @@ function validateExercise(value: unknown, path: string, issues: string[]): value
   if (!isBoundedInteger(value.restSeconds, 0, MAX_REST_SECONDS)) issues.push(`${path}.restSeconds deve estar entre 0 e ${MAX_REST_SECONDS}`);
   if (isNonEmptyString(value.name) && value.name.length > 120) issues.push(`${path}.name é muito longo`);
   if (value.notes !== undefined && typeof value.notes !== 'string') issues.push(`${path}.notes deve ser texto`);
+  if (value.supersetGroup !== undefined && (typeof value.supersetGroup !== 'string' || value.supersetGroup.length > 12)) {
+    issues.push(`${path}.supersetGroup deve ser um texto curto`);
+  }
   return true;
 }
 
@@ -112,6 +115,9 @@ function validateHistorySet(value: unknown, path: string, issues: string[]): val
   if (!isNonNegativeInteger(value.reps)) issues.push(`${path}.reps deve ser um inteiro não negativo`);
   if (!isWeight(value.weight)) issues.push(`${path}.weight deve ser nulo ou um número não negativo`);
   if (!isIsoDate(value.completedAt)) issues.push(`${path}.completedAt deve ser uma data válida`);
+  if (value.rir !== undefined && value.rir !== null && !isBoundedInteger(value.rir, 0, 4)) {
+    issues.push(`${path}.rir deve estar entre 0 e 4`);
+  }
   return true;
 }
 
@@ -192,6 +198,10 @@ function validateActiveWorkout(value: unknown, path: string, issues: string[]): 
       if (!isNonEmptyString(exercise.exerciseName)) issues.push(`${exercisePath}.exerciseName é obrigatório`);
       if (!isBoundedInteger(exercise.restSeconds, 0, MAX_REST_SECONDS)) issues.push(`${exercisePath}.restSeconds deve estar entre 0 e ${MAX_REST_SECONDS}`);
       if (exercise.notes !== undefined && typeof exercise.notes !== 'string') issues.push(`${exercisePath}.notes deve ser texto`);
+      if (exercise.supersetGroup !== undefined && (typeof exercise.supersetGroup !== 'string' || exercise.supersetGroup.length > 12)) {
+        issues.push(`${exercisePath}.supersetGroup deve ser um texto curto`);
+      }
+      if (exercise.skipped !== undefined && typeof exercise.skipped !== 'boolean') issues.push(`${exercisePath}.skipped deve ser booleano`);
       if (!Array.isArray(exercise.sets)) {
         issues.push(`${exercisePath}.sets deve ser uma lista`);
         return;
@@ -212,6 +222,9 @@ function validateActiveWorkout(value: unknown, path: string, issues: string[]): 
         if (!isWeight(set.weight)) issues.push(`${setPath}.weight deve ser nulo ou um número não negativo`);
         if (typeof set.completed !== 'boolean') issues.push(`${setPath}.completed deve ser booleano`);
         if (set.completedAt !== null && !isIsoDate(set.completedAt)) issues.push(`${setPath}.completedAt deve ser nulo ou uma data válida`);
+        if (set.rir !== undefined && set.rir !== null && !isBoundedInteger(set.rir, 0, 4)) {
+          issues.push(`${setPath}.rir deve estar entre 0 e 4`);
+        }
       });
     });
 
@@ -225,6 +238,7 @@ function validateActiveWorkout(value: unknown, path: string, issues: string[]): 
       }
     }
   }
+  if (value.notes !== undefined && typeof value.notes !== 'string') issues.push(`${path}.notes deve ser texto`);
   return true;
 }
 

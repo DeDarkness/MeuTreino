@@ -21,6 +21,15 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 - Detecção de recordes pessoais durante o treino e no histórico.
 - Sugestão automática de carga pela progressão dupla, com botão para aplicar na série.
 - Histórico detalhado preservado por exercício e série.
+- Registro de RIR por série e reaproveitamento no resumo do treino.
+- Superséries configuráveis, alternadas automaticamente sem descanso no meio da rodada.
+- Exercícios reordenáveis durante a sessão, com opções de fazer depois, pular e reativar.
+- Aquecimento automático calculado pela carga de trabalho.
+- Calculadora de anilhas por lado da barra.
+- Anotações rápidas da sessão salvas no histórico.
+- Calendário de frequência mensal e sequência semanal.
+- Resumo pós-treino com comparação de volume, recordes, comemoração e compartilhamento.
+- Opção de desfazer uma série concluída.
 - Funcionamento offline depois do primeiro carregamento.
 - Backup e restauração em arquivo JSON.
 - Atualização automática pelo GitHub Pages.

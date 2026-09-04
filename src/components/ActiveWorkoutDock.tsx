@@ -18,8 +18,8 @@ export function ActiveWorkoutDock({ workout, onOpen, onAddRest, onSkipRest }: Ac
   const exercise = workout.exercises[workout.currentExerciseIndex];
   const set = exercise?.sets[workout.currentSetIndex];
   const { completed, total } = useMemo(() => ({
-    completed: workout.exercises.reduce((sum, item) => sum + item.sets.filter((candidate) => candidate.completed).length, 0),
-    total: workout.exercises.reduce((sum, item) => sum + item.sets.length, 0),
+    completed: workout.exercises.reduce((sum, item) => sum + (item.skipped ? 0 : item.sets.filter((candidate) => candidate.completed).length), 0),
+    total: workout.exercises.reduce((sum, item) => sum + (item.skipped ? 0 : item.sets.length), 0),
   }), [workout.exercises]);
 
   return (

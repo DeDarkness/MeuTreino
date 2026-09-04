@@ -92,6 +92,8 @@ export function HistoryScreen({ history, plans, weightUnit, onDelete }: HistoryS
               <Summary icon={<RotateCcw />} value={String(totalReps)} label="repetições" />
             </div>
 
+            <TrainingCalendar history={history} />
+
             {selectedProgress ? (
               <ExerciseEvolution
                 progress={progress}
@@ -259,6 +261,42 @@ function ProgressChart({ progress, weightUnit }: { progress: ExerciseProgress; w
   );
 }
 
+function TrainingCalendar({ history }: { history: WorkoutHistory[] }) {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const firstDayOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const trained = new Map<string, number>();
+  history.forEach((item) => {
+    const key = localDateKey(new Date(item.finishedAt));
+    trained.set(key, (trained.get(key) ?? 0) + 1);
+  });
+  const monthCount = Array.from(trained.entries()).reduce((total, [key, count]) => key.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`) ? total + count : total, 0);
+  const streak = weeklyStreak(history, today);
+  const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(today);
+
+  return (
+    <section className="training-calendar" aria-labelledby="training-calendar-title">
+      <div className="training-calendar__heading">
+        <div><CalendarDays aria-hidden="true" /><div><span>FREQUÊNCIA</span><h2 id="training-calendar-title">{monthName.charAt(0).toUpperCase() + monthName.slice(1)}</h2></div></div>
+        <div className="training-calendar__streak"><FlameIcon /><strong>{streak}</strong><span>{streak === 1 ? 'semana' : 'semanas'}</span></div>
+      </div>
+      <div className="training-calendar__weekdays" aria-hidden="true">{['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}</div>
+      <div className="training-calendar__days">
+        {Array.from({ length: firstDayOffset }, (_, index) => <span className="is-empty" key={`empty-${index}`} />)}
+        {Array.from({ length: daysInMonth }, (_, index) => {
+          const day = index + 1;
+          const count = trained.get(localDateKey(new Date(year, month, day))) ?? 0;
+          const isToday = day === today.getDate();
+          return <span className={`${count ? 'is-trained' : ''}${isToday ? ' is-today' : ''}`} title={count ? `${count} treino${count > 1 ? 's' : ''}` : undefined} key={day}>{day}{count ? <i /> : null}</span>;
+        })}
+      </div>
+      <p><strong>{monthCount}</strong> {monthCount === 1 ? 'treino neste mês' : 'treinos neste mês'} · sequência de <strong>{streak} {streak === 1 ? 'semana' : 'semanas'}</strong></p>
+    </section>
+  );
+}
+
 function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps, 'plans'>) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const sorted = [...history].sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt));
@@ -281,6 +319,7 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
             </button>
             {open ? (
               <div className="history-details">
+                {item.notes ? <p className="history-session-note">“{item.notes}”</p> : null}
                 {item.exercises.map((exercise) => (
                   <div className="history-exercise" key={`${item.id}-${exercise.exerciseId}`}>
                     <strong>{exercise.exerciseName}</strong>
@@ -289,7 +328,7 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
                         <div key={set.id}>
                           <span>Série {set.setNumber}</span>
                           <span>{formatWeight(set.weight, weightUnit)}</span>
-                          <span>{set.reps} reps</span>
+                          <span>{set.reps} reps{set.rir === null || set.rir === undefined ? '' : ` · RIR ${set.rir === 4 ? '4+' : set.rir}`}</span>
                         </div>
                       ))}
                     </div>
@@ -340,4 +379,34 @@ function maximum(values: Array<number | null>) {
 
 function formatChartValue(value: number) {
   return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value);
+}
+
+function localDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function weeklyStreak(history: WorkoutHistory[], today: Date) {
+  const trainedWeeks = new Set(history.map((item) => weekKey(new Date(item.finishedAt))));
+  const monday = startOfWeek(today);
+  if (!trainedWeeks.has(localDateKey(monday))) monday.setDate(monday.getDate() - 7);
+  let streak = 0;
+  while (trainedWeeks.has(localDateKey(monday))) {
+    streak += 1;
+    monday.setDate(monday.getDate() - 7);
+  }
+  return streak;
+}
+
+function weekKey(date: Date) {
+  return localDateKey(startOfWeek(date));
+}
+
+function startOfWeek(date: Date) {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  result.setDate(result.getDate() - ((result.getDay() + 6) % 7));
+  return result;
+}
+
+function FlameIcon() {
+  return <Zap aria-hidden="true" size={16} />;
 }

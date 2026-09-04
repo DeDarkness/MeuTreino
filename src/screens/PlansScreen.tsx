@@ -4,6 +4,7 @@ import {
   ChevronUp,
   Copy,
   Dumbbell,
+  Link2,
   MoreVertical,
   Pencil,
   Play,
@@ -271,6 +272,7 @@ function PlanDetailDialog({
             <div>
               <h3>{exercise.name}</h3>
               <p>{exercise.targetSets} séries · {exercise.targetReps} reps · {formatRest(exercise.restSeconds)}</p>
+              {exercise.supersetGroup ? <span className="plan-superset-badge"><Link2 size={13} /> Supersérie {exercise.supersetGroup}</span> : null}
               {exercise.notes ? <span>{exercise.notes}</span> : null}
             </div>
           </article>
@@ -347,6 +349,7 @@ function PlanEditorDialog({
         ...exercise,
         name: exercise.name.trim(),
         ...(exercise.notes?.trim() ? { notes: exercise.notes.trim() } : { notes: undefined }),
+        ...(exercise.supersetGroup?.trim() ? { supersetGroup: exercise.supersetGroup.trim() } : { supersetGroup: undefined }),
       })),
       createdAt: state.createdAt,
       updatedAt,
@@ -471,6 +474,21 @@ function ExerciseEditor({
         <NumberField label="Reps" value={exercise.targetReps} min={1} max={999} onChange={(targetReps) => onChange({ targetReps })} />
         <NumberField label="Descanso (s)" value={exercise.restSeconds} min={0} max={1800} step={15} onChange={(restSeconds) => onChange({ restSeconds })} />
       </div>
+
+      <label className="plans-field plans-superset-field">
+        <span>Supersérie <em>opcional</em></span>
+        <div>
+          <Link2 aria-hidden="true" size={18} />
+          <select value={exercise.supersetGroup ?? ''} onChange={(event) => onChange({ supersetGroup: event.target.value || undefined })}>
+            <option value="">Exercício normal</option>
+            <option value="A">Grupo A</option>
+            <option value="B">Grupo B</option>
+            <option value="C">Grupo C</option>
+            <option value="D">Grupo D</option>
+          </select>
+        </div>
+        <small>Use o mesmo grupo em dois exercícios para alternar as séries.</small>
+      </label>
 
       <label className="plans-field">
         <span>Observações <em>opcional</em></span>

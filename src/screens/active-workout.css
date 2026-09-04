@@ -26,7 +26,8 @@
 }
 
 .has-wallpaper .active-workout__current-card,
-.has-wallpaper .active-workout__summary {
+.has-wallpaper .active-workout__summary,
+.has-wallpaper .active-workout__notes-card {
   background: rgba(15, 20, 17, 0.76);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
@@ -226,6 +227,22 @@ button.active-workout__notification-status {
   font-weight: 850;
 }
 
+.active-workout__superset-badge {
+  display: flex;
+  width: fit-content;
+  min-height: 30px;
+  margin-top: 12px;
+  padding: 0 9px;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(78, 242, 208, 0.18);
+  border-radius: 999px;
+  color: #73e8d0;
+  background: rgba(78, 242, 208, 0.06);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
 .active-workout__notes {
   margin: 14px 0 0;
   padding: 12px;
@@ -236,6 +253,67 @@ button.active-workout__notification-status {
   font-size: 0.85rem;
   line-height: 1.45;
 }
+
+.active-workout__quick-actions {
+  display: flex;
+  margin-top: 13px;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.active-workout__quick-actions button {
+  display: flex;
+  min-height: 42px;
+  padding: 0 10px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  border: 1px solid var(--aw-border);
+  border-radius: 12px;
+  color: var(--aw-muted);
+  background: var(--aw-surface-raised);
+  font-size: 0.67rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.active-workout__quick-actions button[aria-expanded="true"] { border-color: rgba(166, 240, 51, 0.3); color: var(--aw-accent); background: rgba(166, 240, 51, 0.07); }
+
+.active-workout__tool-card {
+  margin-top: 9px;
+  padding: 13px;
+  border: 1px solid rgba(166, 240, 51, 0.16);
+  border-radius: 15px;
+  background: #101519;
+  animation: active-tool-in 160ms ease-out both;
+}
+
+@keyframes active-tool-in { from { opacity: 0; transform: translateY(-4px); } }
+
+.active-workout__tool-heading { display: flex; align-items: center; gap: 9px; color: var(--aw-accent); }
+.active-workout__tool-heading > div { display: flex; flex-direction: column; gap: 2px; }
+.active-workout__tool-heading strong { color: var(--aw-text); font-size: 0.76rem; }
+.active-workout__tool-heading span { color: var(--aw-muted); font-size: 0.61rem; }
+.active-workout__tool-empty { display: flex; align-items: center; gap: 9px; color: var(--aw-muted); font-size: 0.68rem; }
+.active-workout__tool-empty svg { color: var(--aw-accent); }
+.active-workout__tool-card > p { margin: 11px 0 0; color: var(--aw-muted); font-size: 0.67rem; }
+
+.active-workout__warmup-sets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 11px; }
+.active-workout__warmup-sets > div { display: flex; min-width: 0; padding: 9px 4px; align-items: center; flex-direction: column; gap: 3px; border-radius: 11px; background: rgba(255, 255, 255, 0.035); }
+.active-workout__warmup-sets span { color: var(--aw-accent); font-size: 0.55rem; font-weight: 850; }
+.active-workout__warmup-sets strong { font-size: 0.73rem; }
+.active-workout__warmup-sets small { color: var(--aw-muted); font-size: 0.59rem; }
+
+.active-workout__plate-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 11px; }
+.active-workout__plate-inputs label { display: flex; min-width: 0; flex-direction: column; gap: 5px; color: var(--aw-muted); font-size: 0.6rem; }
+.active-workout__plate-inputs input { width: 100%; min-height: 44px; padding: 0 10px; border: 1px solid var(--aw-border); border-radius: 11px; outline: 0; color: var(--aw-text); background: #0b0f12; font-weight: 850; text-align: center; }
+.active-workout__plate-inputs input:focus { border-color: var(--aw-accent); }
+.active-workout__plate-result { display: flex; margin-top: 11px; flex-wrap: wrap; gap: 6px; }
+.active-workout__plate-result span { padding: 7px 9px; border: 1px solid rgba(166, 240, 51, 0.14); border-radius: 10px; color: var(--aw-muted); background: rgba(166, 240, 51, 0.05); font-size: 0.64rem; }
+.active-workout__plate-result strong { color: var(--aw-text); }
+.active-workout__plates > small { display: block; margin-top: 8px; color: var(--aw-accent); font-size: 0.61rem; font-weight: 800; }
 
 .active-workout__suggestion {
   display: grid;
@@ -315,6 +393,21 @@ button.active-workout__notification-status {
   gap: 12px;
   margin-top: 17px;
 }
+
+.active-workout__rir {
+  display: grid;
+  margin-top: 15px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.active-workout__rir > div:first-child { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.active-workout__rir > div:first-child strong { font-size: 0.73rem; }
+.active-workout__rir > div:first-child span { color: var(--aw-muted); font-size: 0.59rem; }
+.active-workout__rir > div:last-child { display: grid; grid-template-columns: repeat(5, 34px); gap: 4px; }
+.active-workout__rir button { width: 34px; height: 38px; padding: 0; border: 1px solid var(--aw-border); border-radius: 10px; color: var(--aw-muted); background: var(--aw-surface-raised); font-size: 0.68rem; font-weight: 850; cursor: pointer; }
+.active-workout__rir button.is-selected { border-color: var(--aw-accent); color: #0b1106; background: var(--aw-accent); }
 
 .active-workout__pr {
   display: flex;
@@ -479,6 +572,7 @@ button.active-workout__notification-status {
 }
 
 .active-workout__exercise-row {
+  flex-wrap: wrap;
   min-height: 62px;
   justify-content: space-between;
   gap: 10px;
@@ -487,6 +581,9 @@ button.active-workout__notification-status {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.02);
 }
+
+.active-workout__exercise-row.is-skipped { opacity: 0.58; }
+.active-workout__exercise-row.is-skipped .active-workout__set-dots { filter: grayscale(1); }
 
 .active-workout__exercise-row.is-current {
   border-color: rgba(166, 240, 51, 0.23);
@@ -519,6 +616,8 @@ button.active-workout__notification-status {
 .active-workout__exercise-row p {
   margin: 0;
 }
+
+.active-workout__row-superset { display: inline-flex; margin-top: 4px; align-items: center; gap: 4px; color: #73e8d0; font-size: 0.58rem; font-weight: 750; }
 
 .active-workout__exercise-row h3 {
   overflow: hidden;
@@ -562,20 +661,65 @@ button.active-workout__notification-status {
 .active-workout__set-dots > button.is-selected { border-color: #fff; box-shadow: 0 0 0 3px rgba(166, 240, 51, 0.2); }
 .active-workout__set-dots > button:active { transform: scale(0.9); }
 
+.active-workout__row-actions {
+  display: flex;
+  width: 100%;
+  padding-top: 7px;
+  justify-content: flex-end;
+  gap: 5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.active-workout__row-actions button {
+  display: grid;
+  min-width: 38px;
+  height: 38px;
+  padding: 0 9px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  color: var(--aw-muted);
+  background: var(--aw-surface-raised);
+  font-size: 0.63rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.active-workout__row-actions button:last-child { display: flex; min-width: 62px; }
+.active-workout__row-actions button.is-restore { color: var(--aw-accent); }
+.active-workout__row-actions button:disabled { opacity: 0.25; cursor: default; }
+
 .active-workout__completed-set-status {
+  width: 100%;
   display: flex;
   min-height: 50px;
   margin-top: 18px;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  padding: 0 12px;
   border: 1px solid rgba(166, 240, 51, 0.2);
   border-radius: 15px;
   color: var(--aw-accent);
   background: rgba(166, 240, 51, 0.07);
   font-size: 0.76rem;
   font-weight: 800;
+  cursor: pointer;
 }
+
+.active-workout__restore-exercise { display: flex; width: 100%; min-height: 50px; margin-top: 18px; align-items: center; justify-content: center; gap: 8px; border: 1px solid rgba(166, 240, 51, 0.2); border-radius: 15px; color: var(--aw-accent); background: rgba(166, 240, 51, 0.07); font-size: 0.76rem; font-weight: 800; cursor: pointer; }
+
+.active-workout__notes-card {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--aw-border);
+  border-radius: 22px;
+  background: var(--aw-surface);
+}
+
+.active-workout__notes-card textarea { width: 100%; min-height: 82px; padding: 12px; resize: vertical; border: 1px solid var(--aw-border); border-radius: 13px; outline: 0; color: var(--aw-text); background: #0f1317; font-size: 0.76rem; line-height: 1.45; }
+.active-workout__notes-card textarea:focus { border-color: var(--aw-accent); box-shadow: 0 0 0 3px rgba(166, 240, 51, 0.08); }
+.active-workout__notes-card > button { display: flex; width: fit-content; min-height: 40px; margin: 8px 0 0 auto; padding: 0 10px; align-items: center; gap: 6px; border: 0; border-radius: 10px; color: var(--aw-accent); background: rgba(166, 240, 51, 0.07); font-size: 0.65rem; font-weight: 800; cursor: pointer; }
 
 .active-workout__footer {
   display: grid;
@@ -782,6 +926,18 @@ button.active-workout__notification-status {
 
   .active-workout__controls-grid {
     gap: 8px;
+  }
+
+  .active-workout__rir {
+    grid-template-columns: 1fr;
+  }
+
+  .active-workout__rir > div:last-child {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .active-workout__rir button {
+    width: 100%;
   }
 
   .active-workout__stepper {

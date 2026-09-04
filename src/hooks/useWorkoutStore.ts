@@ -11,13 +11,18 @@ import {
 import {
   addRestTime,
   completeActiveSet,
+  deferActiveExercise,
   duplicateWorkoutPlan,
   finishActiveWorkout,
+  moveActiveExercise,
   saveWorkoutPlan,
   selectActiveSet,
   skipRest,
   startWorkoutFromPlan,
+  toggleSkipActiveExercise,
+  uncompleteActiveSet,
   updateActiveSet,
+  updateActiveWorkoutNotes,
   type ActiveSetPatch,
   type WorkoutPlanInput,
 } from '../lib/workout';
@@ -31,6 +36,11 @@ export interface WorkoutStoreActions {
   updateSet(exerciseId: string, setId: string, patch: ActiveSetPatch): Promise<void>;
   selectSet(exerciseId: string, setId: string): Promise<void>;
   completeSet(exerciseId: string, setId: string): Promise<void>;
+  uncompleteSet(exerciseId: string, setId: string): Promise<void>;
+  moveExercise(exerciseId: string, direction: -1 | 1): Promise<void>;
+  deferExercise(exerciseId: string): Promise<void>;
+  toggleSkipExercise(exerciseId: string): Promise<void>;
+  updateWorkoutNotes(notes: string): Promise<void>;
   addRestSeconds(seconds?: number): Promise<void>;
   skipRest(): Promise<void>;
   finishWorkout(): Promise<WorkoutHistory>;
@@ -161,6 +171,21 @@ export function useWorkoutStore(): WorkoutStore {
   const completeSet = useCallback((exerciseId: string, setId: string) =>
     commitState((current) => completeActiveSet(current, exerciseId, setId)), [commitState]);
 
+  const uncompleteSet = useCallback((exerciseId: string, setId: string) =>
+    commitState((current) => uncompleteActiveSet(current, exerciseId, setId)), [commitState]);
+
+  const moveExercise = useCallback((exerciseId: string, direction: -1 | 1) =>
+    commitState((current) => moveActiveExercise(current, exerciseId, direction)), [commitState]);
+
+  const deferExercise = useCallback((exerciseId: string) =>
+    commitState((current) => deferActiveExercise(current, exerciseId)), [commitState]);
+
+  const toggleSkipExercise = useCallback((exerciseId: string) =>
+    commitState((current) => toggleSkipActiveExercise(current, exerciseId)), [commitState]);
+
+  const updateWorkoutNotes = useCallback((notes: string) =>
+    commitState((current) => updateActiveWorkoutNotes(current, notes)), [commitState]);
+
   const addRestSeconds = useCallback((seconds = 15) =>
     commitState((current) => addRestTime(current, seconds)), [commitState]);
 
@@ -251,6 +276,11 @@ export function useWorkoutStore(): WorkoutStore {
     updateSet,
     selectSet,
     completeSet,
+    uncompleteSet,
+    moveExercise,
+    deferExercise,
+    toggleSkipExercise,
+    updateWorkoutNotes,
     addRestSeconds,
     skipRest: skipCurrentRest,
     finishWorkout,
@@ -265,17 +295,22 @@ export function useWorkoutStore(): WorkoutStore {
     addRestSeconds,
     clearData,
     completeSet,
+    deferExercise,
     deleteHistory,
     deletePlan,
     duplicatePlan,
     exportData,
     finishWorkout,
     importData,
+    moveExercise,
     savePlan,
     skipCurrentRest,
     startWorkout,
     updatePreferences,
+    updateWorkoutNotes,
     updateSet,
+    uncompleteSet,
+    toggleSkipExercise,
     selectSet,
   ]);
 
