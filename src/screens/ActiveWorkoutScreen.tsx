@@ -6,7 +6,9 @@ import {
   Dumbbell,
   Minus,
   Plus,
+  Sparkles,
   SkipForward,
+  TrendingUp,
   Trophy,
   X,
 } from 'lucide-react';
@@ -15,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNumericDraft } from '../hooks/useNumericDraft';
 import { fromStoredWeight, toStoredWeight } from '../lib/format';
 import { type RestNotificationPermission } from '../lib/notifications';
+import { getLoadSuggestion, getPotentialRecordLabels } from '../lib/progress';
 import { primeRestAlertAudio } from '../lib/restAlert';
 import type {
   ActiveWorkout,
@@ -90,6 +93,14 @@ export function ActiveWorkoutScreen({
   const previousSet = useMemo(
     () => findPreviousSet(history, exercise?.exerciseId, exercise?.exerciseName, currentSet?.setNumber),
     [currentSet?.setNumber, exercise?.exerciseId, exercise?.exerciseName, history],
+  );
+  const loadSuggestion = useMemo(
+    () => exercise ? getLoadSuggestion(history, exercise, preferences.weightUnit) : null,
+    [exercise, history, preferences.weightUnit],
+  );
+  const recordLabels = useMemo(
+    () => exercise && currentSet ? getPotentialRecordLabels(history, exercise, currentSet) : [],
+    [currentSet, exercise, history],
   );
 
   const completeCurrentSet = () => {
@@ -176,6 +187,23 @@ export function ActiveWorkoutScreen({
 
         {exercise.notes ? <p className="active-workout__notes">{exercise.notes}</p> : null}
 
+        {loadSuggestion ? (
+          <div className="active-workout__suggestion">
+            <div className="active-workout__suggestion-icon"><Sparkles aria-hidden="true" size={20} /></div>
+            <div className="active-workout__suggestion-copy">
+              <span>PROGRESSÃO SUGERIDA</span>
+              <strong>{formatWeight(fromStoredWeight(loadSuggestion.suggestedWeight, preferences.weightUnit) ?? 0)} {preferences.weightUnit}</strong>
+              <small>Você atingiu {loadSuggestion.targetReps} reps em todas as séries do último treino.</small>
+            </div>
+            <button
+              type="button"
+              onClick={() => onUpdateSet(exerciseIndex, setIndex, { weight: loadSuggestion.suggestedWeight })}
+            >
+              Usar
+            </button>
+          </div>
+        ) : null}
+
         {previousSet ? (
           <div className="active-workout__last-hint">
             <Clock3 aria-hidden="true" size={16} />
@@ -206,6 +234,16 @@ export function ActiveWorkoutScreen({
             onChange={(value) => onUpdateSet(exerciseIndex, setIndex, { weight: toStoredWeight(value, preferences.weightUnit) })}
           />
         </div>
+
+        {recordLabels.length ? (
+          <div className={`active-workout__pr${currentSet.completed ? ' is-earned' : ''}`}>
+            {currentSet.completed ? <Trophy aria-hidden="true" size={18} /> : <TrendingUp aria-hidden="true" size={18} />}
+            <div>
+              <strong>{currentSet.completed ? 'Novo recorde registrado!' : 'Potencial novo recorde'}</strong>
+              <span>{recordLabels.join(' · ')}</span>
+            </div>
+          </div>
+        ) : null}
 
         {currentSet.completed ? (
           <div className="active-workout__completed-set-status"><Check aria-hidden="true" size={19} /> Série concluída · valores ainda editáveis</div>

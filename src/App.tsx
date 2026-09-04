@@ -263,6 +263,7 @@ export default function App() {
         {activeTab === 'history' ? (
           <HistoryScreen
             history={state.history}
+            plans={state.plans}
             weightUnit={state.preferences.weightUnit}
             onDelete={(id) => runAction(store.deleteHistory(id))}
           />

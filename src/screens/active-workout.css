@@ -237,6 +237,58 @@ button.active-workout__notification-status {
   line-height: 1.45;
 }
 
+.active-workout__suggestion {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  margin-top: 14px;
+  padding: 12px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(166, 240, 51, 0.24);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(166, 240, 51, 0.09), rgba(166, 240, 51, 0.025));
+}
+
+.active-workout__suggestion-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--aw-accent);
+  background: rgba(166, 240, 51, 0.11);
+}
+
+.active-workout__suggestion-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.active-workout__suggestion-copy > span {
+  color: var(--aw-accent);
+  font-size: 0.57rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.active-workout__suggestion-copy strong { font-size: 1rem; }
+.active-workout__suggestion-copy small { color: var(--aw-muted); font-size: 0.64rem; line-height: 1.35; }
+
+.active-workout__suggestion > button {
+  min-width: 54px;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  color: #0b1106;
+  background: var(--aw-accent);
+  font-size: 0.73rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .active-workout__last-hint {
   flex-wrap: wrap;
   gap: 6px;
@@ -263,6 +315,24 @@ button.active-workout__notification-status {
   gap: 12px;
   margin-top: 17px;
 }
+
+.active-workout__pr {
+  display: flex;
+  margin-top: 13px;
+  padding: 11px 12px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 199, 76, 0.2);
+  border-radius: 14px;
+  color: #ffd875;
+  background: rgba(255, 199, 76, 0.06);
+}
+
+.active-workout__pr > svg { flex: 0 0 auto; }
+.active-workout__pr > div { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.active-workout__pr strong { font-size: 0.78rem; }
+.active-workout__pr span { color: #bbae8c; font-size: 0.66rem; }
+.active-workout__pr.is-earned { border-color: rgba(166, 240, 51, 0.26); color: var(--aw-accent); background: rgba(166, 240, 51, 0.07); }
 
 .active-workout__set-control label {
   display: block;
