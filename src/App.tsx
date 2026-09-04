@@ -1,10 +1,12 @@
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { ActiveWorkoutDock } from './components/ActiveWorkoutDock';
 import { BottomNav, type AppTab } from './components/BottomNav';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { WallpaperBackdrop } from './components/WallpaperBackdrop';
 import { useWallpaper } from './hooks/useWallpaper';
+import { useRestAlert } from './hooks/useRestAlert';
 import { useWorkoutStore } from './hooks/useWorkoutStore';
 import { getRestNotificationPermission, requestRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
@@ -48,6 +50,7 @@ export default function App() {
 
   const state = store.state;
   const activeWorkout = state?.activeWorkout ?? null;
+  useRestAlert(activeWorkout, state?.preferences ?? null, store.skipRest);
   const completedSets = useMemo(
     () => activeWorkout?.exercises.reduce(
       (total, exercise) => total + exercise.sets.filter((set) => set.completed).length,
@@ -175,6 +178,12 @@ export default function App() {
             if (!exercise || !set) return;
             runAction(store.updateSet(exercise.exerciseId, set.id, patch as Partial<Pick<ActiveWorkoutSet, 'reps' | 'weight'>>));
           }}
+          onSelectSet={(exerciseIndex, setIndex) => {
+            const exercise = activeWorkout.exercises[exerciseIndex];
+            const set = exercise?.sets[setIndex];
+            if (!exercise || !set) return;
+            runAction(store.selectSet(exercise.exerciseId, set.id));
+          }}
           onCompleteSet={() => {
             const exercise = activeWorkout.exercises[activeWorkout.currentExerciseIndex];
             const set = exercise?.sets[activeWorkout.currentSetIndex];
@@ -202,13 +211,20 @@ export default function App() {
           notificationPermission={notificationPermission}
           onRequestNotifications={requestNotifications}
         />
+        <BottomNav
+          activeTab={null}
+          onChange={(tab) => {
+            setActiveTab(tab);
+            setShowActiveWorkout(false);
+          }}
+        />
         <UpdatePrompt />
       </div>
     );
   }
 
   return (
-    <div className={`app-shell${wallpaper.asset ? ' has-wallpaper' : ''}`}>
+    <div className={`app-shell${wallpaper.asset ? ' has-wallpaper' : ''}${activeWorkout ? ' has-active-workout' : ''}`}>
       <WallpaperBackdrop asset={wallpaper.asset} url={wallpaper.url} />
       <main className="app-content">
         {store.error ? (
@@ -282,6 +298,14 @@ export default function App() {
         ) : null}
       </main>
 
+      {activeWorkout ? (
+        <ActiveWorkoutDock
+          workout={activeWorkout}
+          onOpen={() => setShowActiveWorkout(true)}
+          onAddRest={(seconds) => runAction(store.addRestSeconds(seconds))}
+          onSkipRest={() => runAction(store.skipRest())}
+        />
+      ) : null}
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
       <UpdatePrompt />
     </div>

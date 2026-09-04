@@ -175,6 +175,10 @@ svg {
   padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 24px);
 }
 
+.app-shell.has-active-workout .app-content {
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 112px);
+}
+
 .screen {
   display: flex;
   flex-direction: column;
@@ -1325,6 +1329,41 @@ svg {
   left: max(12px, calc((100vw - 536px) / 2));
   margin: 0;
 }
+
+.workout-dock {
+  position: fixed;
+  z-index: 49;
+  right: max(12px, calc((100vw - 536px) / 2));
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 10px);
+  left: max(12px, calc((100vw - 536px) / 2));
+  display: flex;
+  min-height: 70px;
+  padding: 7px;
+  align-items: stretch;
+  gap: 6px;
+  border: 1px solid rgba(166, 240, 51, 0.24);
+  border-radius: 20px;
+  background: rgba(15, 21, 17, 0.96);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+}
+
+.workout-dock.is-resting { border-color: rgba(166, 240, 51, 0.42); box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42), 0 0 28px rgba(166, 240, 51, 0.08); }
+.workout-dock__main { display: flex; min-width: 0; min-height: 56px; padding: 5px 7px; align-items: center; flex: 1; gap: 9px; border: 0; border-radius: 14px; color: var(--text); background: transparent; text-align: left; cursor: pointer; }
+.workout-dock__icon { display: grid; width: 40px; height: 40px; place-items: center; flex: 0 0 auto; border-radius: 12px; color: var(--accent); background: var(--accent-soft); }
+.workout-dock__icon svg { width: 20px; }
+.workout-dock__copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.workout-dock__copy strong,
+.workout-dock__copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workout-dock__copy strong { font-size: 0.75rem; }
+.workout-dock__copy small { color: var(--muted); font-size: 0.6rem; }
+.workout-dock time { color: var(--accent); font-family: var(--font-mono, ui-monospace, monospace); font-size: 1.25rem; font-variant-numeric: tabular-nums; font-weight: 900; letter-spacing: -0.06em; }
+.workout-dock__progress { color: var(--accent); font-size: 0.72rem; font-weight: 900; }
+.workout-dock__actions { display: flex; align-items: stretch; gap: 5px; }
+.workout-dock__actions button { display: flex; min-width: 44px; padding: 0 7px; align-items: center; justify-content: center; gap: 2px; border: 1px solid var(--line); border-radius: 13px; color: var(--text); background: var(--surface-raised); font-size: 0.63rem; font-weight: 850; cursor: pointer; }
+.workout-dock__actions button:last-child { color: #0b1106; background: var(--accent); }
+.workout-dock button:active { transform: scale(0.96); }
 
 .bottom-nav {
   position: fixed;

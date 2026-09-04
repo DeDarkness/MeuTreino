@@ -12,6 +12,9 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 - Exercícios com séries, repetições, carga, descanso e observações.
 - Execução série a série, reaproveitando a última carga e repetições registradas.
 - Cronômetro de descanso com `+15 s`, pular, som e vibração.
+- Descanso não bloqueante: navegue pelo app enquanto o contador continua em um painel flutuante.
+- Edição de carga e repetições de qualquer série durante a sessão em andamento.
+- Alerta sonoro reforçado, com teste nos Ajustes.
 - Notificação de fim do descanso, com permissão solicitada diretamente pelo iPhone no app instalado.
 - Sessão ativa restaurada após fechar ou recarregar o app.
 - Histórico detalhado por exercício e série.

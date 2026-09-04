@@ -14,6 +14,7 @@ import {
   duplicateWorkoutPlan,
   finishActiveWorkout,
   saveWorkoutPlan,
+  selectActiveSet,
   skipRest,
   startWorkoutFromPlan,
   updateActiveSet,
@@ -28,6 +29,7 @@ export interface WorkoutStoreActions {
   duplicatePlan(planId: string): Promise<WorkoutPlan>;
   startWorkout(planId: string): Promise<void>;
   updateSet(exerciseId: string, setId: string, patch: ActiveSetPatch): Promise<void>;
+  selectSet(exerciseId: string, setId: string): Promise<void>;
   completeSet(exerciseId: string, setId: string): Promise<void>;
   addRestSeconds(seconds?: number): Promise<void>;
   skipRest(): Promise<void>;
@@ -153,6 +155,9 @@ export function useWorkoutStore(): WorkoutStore {
   const updateSet = useCallback((exerciseId: string, setId: string, patch: ActiveSetPatch) =>
     commitState((current) => updateActiveSet(current, exerciseId, setId, patch)), [commitState]);
 
+  const selectSet = useCallback((exerciseId: string, setId: string) =>
+    commitState((current) => selectActiveSet(current, exerciseId, setId)), [commitState]);
+
   const completeSet = useCallback((exerciseId: string, setId: string) =>
     commitState((current) => completeActiveSet(current, exerciseId, setId)), [commitState]);
 
@@ -244,6 +249,7 @@ export function useWorkoutStore(): WorkoutStore {
     duplicatePlan,
     startWorkout,
     updateSet,
+    selectSet,
     completeSet,
     addRestSeconds,
     skipRest: skipCurrentRest,
@@ -270,6 +276,7 @@ export function useWorkoutStore(): WorkoutStore {
     startWorkout,
     updatePreferences,
     updateSet,
+    selectSet,
   ]);
 
   return { state, loading, error, clearError, ...actions };

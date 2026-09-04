@@ -294,7 +294,7 @@ function PlanDetailDialog({
           onClick={onStart}
           disabled={anotherWorkoutIsActive}
         >
-          <Play size={20} fill="currentColor" /> {sameActivePlan ? 'Continuar treino' : 'Começar treino'}
+          <Play size={20} fill="currentColor" /> {sameActivePlan ? 'Editar cargas e repetições' : 'Começar treino'}
         </button>
       </div>
     </DialogShell>

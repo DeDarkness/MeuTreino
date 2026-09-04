@@ -5,7 +5,9 @@ import {
   addRestTime,
   completeActiveSet,
   finishActiveWorkout,
+  selectActiveSet,
   startWorkoutFromPlan,
+  updateActiveSet,
 } from './workout';
 import type { AppState } from '../types';
 
@@ -71,6 +73,29 @@ describe('sessão de treino', () => {
     expect(finished.state.activeWorkout).toBeNull();
     expect(finished.history.exercises).toHaveLength(1);
     expect(finished.history.exercises[0].sets).toHaveLength(1);
+  });
+
+  it('permite escolher e editar qualquer série sem interromper o descanso', () => {
+    const seed = createSeedState(startedAt);
+    const started = startWorkoutFromPlan(seed, 'plan-segunda', startedAt).state;
+    const firstExercise = started.activeWorkout!.exercises[0];
+    const resting = completeActiveSet(
+      started,
+      firstExercise.exerciseId,
+      firstExercise.sets[0].id,
+      new Date('2026-09-01T12:00:10.000Z'),
+    );
+    const targetExercise = resting.activeWorkout!.exercises[1];
+    const targetSet = targetExercise.sets[2];
+    const selected = selectActiveSet(resting, targetExercise.exerciseId, targetSet.id, '2026-09-01T12:00:20.000Z');
+    const edited = updateActiveSet(selected, targetExercise.exerciseId, targetSet.id, { reps: 9, weight: 87.5 });
+
+    expect(edited.activeWorkout).toMatchObject({
+      currentExerciseIndex: 1,
+      currentSetIndex: 2,
+      restEndsAt: '2026-09-01T12:02:10.000Z',
+    });
+    expect(edited.activeWorkout?.exercises[1].sets[2]).toMatchObject({ reps: 9, weight: 87.5 });
   });
 });
 

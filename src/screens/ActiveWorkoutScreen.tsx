@@ -10,11 +10,12 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useNumericDraft } from '../hooks/useNumericDraft';
 import { fromStoredWeight, toStoredWeight } from '../lib/format';
-import { showRestFinishedNotification, type RestNotificationPermission } from '../lib/notifications';
+import { type RestNotificationPermission } from '../lib/notifications';
+import { primeRestAlertAudio } from '../lib/restAlert';
 import type {
   ActiveWorkout,
   ActiveWorkoutSet,
@@ -33,6 +34,7 @@ export interface ActiveWorkoutScreenProps {
     setIndex: number,
     patch: Partial<Pick<ActiveWorkoutSet, 'reps' | 'weight'>>,
   ) => void;
+  onSelectSet: (exerciseIndex: number, setIndex: number) => void;
   onCompleteSet: () => void;
   onSkipRest: () => void;
   onAddRest: (seconds: number) => void;
@@ -43,13 +45,12 @@ export interface ActiveWorkoutScreenProps {
   onRequestNotifications: () => Promise<RestNotificationPermission>;
 }
 
-type AudioContextConstructor = typeof AudioContext;
-
 export function ActiveWorkoutScreen({
   workout,
   preferences,
   history,
   onUpdateSet,
+  onSelectSet,
   onCompleteSet,
   onSkipRest,
   onAddRest,
@@ -60,8 +61,7 @@ export function ActiveWorkoutScreen({
   onRequestNotifications,
 }: ActiveWorkoutScreenProps) {
   const now = useCurrentTime();
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const alertedRestRef = useRef<string | null>(null);
+  const currentCardRef = useRef<HTMLElement | null>(null);
 
   const totalSets = useMemo(
     () => workout.exercises.reduce((total, exercise) => total + exercise.sets.length, 0),
@@ -92,36 +92,18 @@ export function ActiveWorkoutScreen({
     [currentSet?.setNumber, exercise?.exerciseId, exercise?.exerciseName, history],
   );
 
-  useEffect(() => {
-    if (!workout.restEndsAt || restEndMs === null || Number.isNaN(restEndMs)) {
-      alertedRestRef.current = null;
-      return;
-    }
-    if (now < restEndMs || alertedRestRef.current === workout.restEndsAt) return;
-
-    alertedRestRef.current = workout.restEndsAt;
-    if (preferences.soundEnabled) playRestAlert(audioContextRef, preferences.restAlertSound);
-    if (preferences.vibrationEnabled && 'vibrate' in navigator) {
-      navigator.vibrate([180, 90, 180, 90, 260]);
-    }
-    void showRestFinishedNotification(exercise?.exerciseName ?? 'próxima série', currentSet?.setNumber ?? 1);
-    onSkipRest();
-  }, [currentSet?.setNumber, exercise?.exerciseName, now, onSkipRest, preferences.restAlertSound, preferences.soundEnabled, preferences.vibrationEnabled, restEndMs, workout.restEndsAt]);
-
-  const primeAudio = useCallback(() => {
-    if (!preferences.soundEnabled) return;
-    const context = getAudioContext(audioContextRef);
-    if (context?.state === 'suspended') void context.resume();
-  }, [preferences.soundEnabled]);
-
   const completeCurrentSet = () => {
-    primeAudio();
+    primeRestAlertAudio(preferences.soundEnabled);
     onCompleteSet();
   };
 
   const skipRest = () => {
-    alertedRestRef.current = workout.restEndsAt;
     onSkipRest();
+  };
+
+  const selectSet = (nextExerciseIndex: number, nextSetIndex: number) => {
+    onSelectSet(nextExerciseIndex, nextSetIndex);
+    window.requestAnimationFrame(() => currentCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
   if (!exercise || !currentSet) {
@@ -134,20 +116,6 @@ export function ActiveWorkoutScreen({
           Salvar treino
         </button>
       </main>
-    );
-  }
-
-  if (isResting) {
-    return (
-      <RestOverlay
-        remainingSeconds={remainingRestSeconds}
-        nextExerciseName={exercise.exerciseName}
-        nextSetNumber={currentSet.setNumber}
-        totalSets={exercise.sets.length}
-        alertSound={preferences.restAlertSound}
-        onAddRest={() => onAddRest(15)}
-        onSkipRest={skipRest}
-      />
     );
   }
 
@@ -184,7 +152,19 @@ export function ActiveWorkoutScreen({
         <NotificationStatus permission={notificationPermission} onRequest={onRequestNotifications} />
       </section>
 
-      <section className="active-workout__current-card">
+      {isResting ? (
+        <RestPanel
+          remainingSeconds={remainingRestSeconds}
+          nextExerciseName={exercise.exerciseName}
+          nextSetNumber={currentSet.setNumber}
+          totalSets={exercise.sets.length}
+          alertSound={preferences.restAlertSound}
+          onAddRest={() => onAddRest(15)}
+          onSkipRest={skipRest}
+        />
+      ) : null}
+
+      <section className="active-workout__current-card" ref={currentCardRef}>
         <div className="active-workout__current-heading">
           <div className="active-workout__exercise-number">{exerciseIndex + 1}</div>
           <div>
@@ -196,59 +176,61 @@ export function ActiveWorkoutScreen({
 
         {exercise.notes ? <p className="active-workout__notes">{exercise.notes}</p> : null}
 
+        {previousSet ? (
+          <div className="active-workout__last-hint">
+            <Clock3 aria-hidden="true" size={16} />
+            <span>Último treino:</span>
+            <strong>{previousSet.reps} reps{previousSet.weight === null ? '' : ` · ${formatWeight(fromStoredWeight(previousSet.weight, preferences.weightUnit) ?? 0)} ${preferences.weightUnit}`}</strong>
+          </div>
+        ) : (
+          <div className="active-workout__last-hint active-workout__last-hint--muted">
+            Primeira vez registrada para esta série
+          </div>
+        )}
+
+        <div className="active-workout__controls-grid">
+          <SetControl
+            label="Repetições"
+            value={currentSet.reps}
+            step={1}
+            min={0}
+            inputMode="numeric"
+            onChange={(value) => onUpdateSet(exerciseIndex, setIndex, { reps: Math.round(value) })}
+          />
+          <SetControl
+            label={`Carga (${preferences.weightUnit})`}
+            value={fromStoredWeight(currentSet.weight, preferences.weightUnit) ?? 0}
+            step={0.5}
+            min={0}
+            inputMode="decimal"
+            onChange={(value) => onUpdateSet(exerciseIndex, setIndex, { weight: toStoredWeight(value, preferences.weightUnit) })}
+          />
+        </div>
+
+        {currentSet.completed ? (
+          <div className="active-workout__completed-set-status"><Check aria-hidden="true" size={19} /> Série concluída · valores ainda editáveis</div>
+        ) : (
+            <button className="active-workout__complete-button" type="button" onClick={completeCurrentSet}>
+              <Check aria-hidden="true" size={25} strokeWidth={3} /> Concluir série
+            </button>
+        )}
+
         {completedSets === totalSets ? (
           <div className="active-workout__finished-inline">
             <Trophy aria-hidden="true" size={42} />
             <h2>Treino concluído!</h2>
-            <p>Você completou todas as {totalSets} séries.</p>
+            <p>Revise as cargas ou salve as {totalSets} séries no histórico.</p>
             <button className="active-workout__complete-button" type="button" onClick={onFinish}>
               <Check aria-hidden="true" size={24} strokeWidth={3} /> Salvar no histórico
             </button>
           </div>
-        ) : (
-          <>
-            {previousSet ? (
-              <div className="active-workout__last-hint">
-                <Clock3 aria-hidden="true" size={16} />
-                <span>Último treino:</span>
-                <strong>{previousSet.reps} reps{previousSet.weight === null ? '' : ` · ${formatWeight(fromStoredWeight(previousSet.weight, preferences.weightUnit) ?? 0)} ${preferences.weightUnit}`}</strong>
-              </div>
-            ) : (
-              <div className="active-workout__last-hint active-workout__last-hint--muted">
-                Primeira vez registrada para esta série
-              </div>
-            )}
-
-            <div className="active-workout__controls-grid">
-              <SetControl
-                label="Repetições"
-                value={currentSet.reps}
-                step={1}
-                min={0}
-                inputMode="numeric"
-                onChange={(value) => onUpdateSet(exerciseIndex, setIndex, { reps: Math.round(value) })}
-              />
-              <SetControl
-                label={`Carga (${preferences.weightUnit})`}
-                value={fromStoredWeight(currentSet.weight, preferences.weightUnit) ?? 0}
-                step={0.5}
-                min={0}
-                inputMode="decimal"
-                onChange={(value) => onUpdateSet(exerciseIndex, setIndex, { weight: toStoredWeight(value, preferences.weightUnit) })}
-              />
-            </div>
-
-            <button className="active-workout__complete-button" type="button" onClick={completeCurrentSet}>
-              <Check aria-hidden="true" size={25} strokeWidth={3} /> Concluir série
-            </button>
-          </>
-        )}
+        ) : null}
       </section>
 
       <section className="active-workout__summary" aria-labelledby="workout-summary-title">
         <div className="active-workout__section-title">
           <Dumbbell aria-hidden="true" size={20} />
-          <h2 id="workout-summary-title">Resumo do treino</h2>
+          <div><h2 id="workout-summary-title">Séries do treino</h2><p>Toque em qualquer série para editar carga e repetições.</p></div>
         </div>
         <div className="active-workout__exercise-list">
           {workout.exercises.map((item, itemExerciseIndex) => {
@@ -264,10 +246,17 @@ export function ActiveWorkoutScreen({
                   </div>
                 </div>
                 <div className="active-workout__set-dots" aria-label={`${itemCompleted} de ${item.sets.length} séries concluídas`}>
-                  {item.sets.map((set) => (
-                    <span className={set.completed ? 'is-complete' : ''} key={set.id}>
+                  {item.sets.map((set, itemSetIndex) => (
+                    <button
+                      className={`${set.completed ? 'is-complete' : ''}${isCurrent && itemSetIndex === setIndex ? ' is-selected' : ''}`}
+                      type="button"
+                      aria-label={`Editar ${item.exerciseName}, série ${set.setNumber}`}
+                      aria-current={isCurrent && itemSetIndex === setIndex ? 'step' : undefined}
+                      key={set.id}
+                      onClick={() => selectSet(itemExerciseIndex, itemSetIndex)}
+                    >
                       {set.completed ? <Check aria-hidden="true" size={13} strokeWidth={3} /> : set.setNumber}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </article>
@@ -358,7 +347,7 @@ function NotificationStatus({
   );
 }
 
-function RestOverlay({
+function RestPanel({
   remainingSeconds,
   nextExerciseName,
   nextSetNumber,
@@ -376,22 +365,23 @@ function RestOverlay({
   onSkipRest: () => void;
 }) {
   return (
-    <aside className="active-workout__rest" role="dialog" aria-modal="true" aria-label="Tempo de descanso">
+    <aside className="active-workout__rest" role="status" aria-label="Tempo de descanso">
       <div className="active-workout__rest-glow" />
       <div className="active-workout__rest-content">
-        <div className="active-workout__rest-icon">
-          <BellRing aria-hidden="true" size={28} />
+        <div className="active-workout__rest-top">
+          <div className="active-workout__rest-icon"><BellRing aria-hidden="true" size={24} /></div>
+          <div className="active-workout__rest-copy">
+            <span className="active-workout__rest-eyebrow">DESCANSO EM ANDAMENTO</span>
+            <p className="active-workout__rest-message">Pode navegar e editar o treino.</p>
+          </div>
+          <time className="active-workout__rest-time" aria-label={`${remainingSeconds} segundos restantes`}>
+            {formatRestClock(remainingSeconds)}
+          </time>
         </div>
-        <span className="active-workout__rest-eyebrow">DESCANSO</span>
-        <time className="active-workout__rest-time" aria-label={`${remainingSeconds} segundos restantes`}>
-          {formatRestClock(remainingSeconds)}
-        </time>
-        <p className="active-workout__rest-message">Respire. Recupere. Volte mais forte.</p>
 
         <div className="active-workout__rest-next">
           <span>PRÓXIMA</span>
-          <strong>{nextExerciseName}</strong>
-          <p>Série {nextSetNumber} de {totalSets}</p>
+          <div><strong>{nextExerciseName}</strong><p>Série {nextSetNumber} de {totalSets}</p></div>
         </div>
 
         <div className="active-workout__rest-actions">
@@ -406,7 +396,7 @@ function RestOverlay({
         </div>
 
         <p className="active-workout__rest-notice">
-          O alerta {alertSound === 'bell' ? 'de sino' : 'sonoro'} depende deste app continuar aberto. O iPhone pode suspender sons se você bloquear a tela ou trocar de aplicativo.
+          Continue usando o MeuTreino normalmente. O aviso {alertSound === 'bell' ? 'de sino' : 'sonoro'} e a notificação serão disparados ao chegar a zero.
         </p>
       </div>
     </aside>
@@ -483,63 +473,4 @@ function formatRestClock(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
-
-function getAudioContext(ref: { current: AudioContext | null }) {
-  if (ref.current) return ref.current;
-  const windowWithWebkit = window as typeof window & { webkitAudioContext?: AudioContextConstructor };
-  const Context = window.AudioContext ?? windowWithWebkit.webkitAudioContext;
-  if (!Context) return null;
-  ref.current = new Context();
-  return ref.current;
-}
-
-function playRestAlert(
-  ref: { current: AudioContext | null },
-  sound: Preferences['restAlertSound'],
-) {
-  const context = getAudioContext(ref);
-  if (!context) return;
-
-  const start = () => {
-    if (sound === 'bell') {
-      playTone(context, 784, 0, 0.85, 'sine', 0.28);
-      playTone(context, 1175, 0.02, 1.1, 'sine', 0.12);
-      playTone(context, 1568, 0.04, 0.7, 'sine', 0.06);
-      return;
-    }
-    playTone(context, 880, 0, 0.18, 'square', 0.16);
-    playTone(context, 1047, 0.27, 0.22, 'square', 0.16);
-    playTone(context, 1319, 0.57, 0.3, 'square', 0.18);
-  };
-
-  if (context.state === 'suspended') {
-    void context.resume().then(start).catch(() => undefined);
-  } else {
-    start();
-  }
-}
-
-function playTone(
-  context: AudioContext,
-  frequency: number,
-  delay: number,
-  duration: number,
-  type: OscillatorType,
-  volume: number,
-) {
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  const startsAt = context.currentTime + delay;
-  const endsAt = startsAt + duration;
-
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, startsAt);
-  gain.gain.setValueAtTime(0.0001, startsAt);
-  gain.gain.exponentialRampToValueAtTime(volume, startsAt + 0.025);
-  gain.gain.exponentialRampToValueAtTime(0.0001, endsAt);
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-  oscillator.start(startsAt);
-  oscillator.stop(endsAt + 0.02);
 }

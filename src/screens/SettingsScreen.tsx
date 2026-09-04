@@ -1,7 +1,8 @@
-import { BellRing, Check, Database, Download, Info, LockKeyhole, Smartphone, Trash2, Upload } from 'lucide-react';
+import { BellRing, Check, Database, Download, Info, LockKeyhole, Smartphone, Trash2, Upload, Volume2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import type { RestNotificationPermission } from '../lib/notifications';
+import { playRestAlert, primeRestAlertAudio } from '../lib/restAlert';
 import type { Preferences } from '../types';
 
 type SettingsScreenProps = {
@@ -67,7 +68,7 @@ export function SettingsScreen({
         )}
         <ToggleRow
           label="Som ao terminar"
-          description="Toca um aviso quando o contador chega a zero."
+          description="Toca um aviso reforçado de aproximadamente 3 segundos."
           checked={preferences.soundEnabled}
           onChange={(checked) => onPreferencesChange({ soundEnabled: checked })}
         />
@@ -88,6 +89,11 @@ export function SettingsScreen({
             ))}
           </div>
         </div>
+        <button className="setting-action" type="button" onClick={() => {
+          primeRestAlertAudio(true);
+          playRestAlert(preferences.restAlertSound);
+          setMessage('Reproduzindo o aviso de descanso.');
+        }}><Volume2 /> <span><strong>Testar som do descanso</strong><small>Reproduz agora o alerta longo selecionado.</small></span></button>
         <p className="settings-note"><Info size={16} /> A tela poderá apagar normalmente. Como o cronômetro é local, o iOS pode atrasar o aviso caso suspenda o Web App com a tela bloqueada.</p>
       </SettingsGroup>
 
@@ -157,7 +163,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 3.1 · PWA pessoal e offline</span></footer>
+      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 3.2 · PWA pessoal e offline</span></footer>
     </section>
   );
 }

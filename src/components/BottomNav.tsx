@@ -3,7 +3,7 @@ import { ChartNoAxesColumnIncreasing, Dumbbell, House, Image as ImageIcon, Setti
 export type AppTab = 'home' | 'plans' | 'history' | 'wallpaper' | 'settings';
 
 type BottomNavProps = {
-  activeTab: AppTab;
+  activeTab: AppTab | null;
   onChange: (tab: AppTab) => void;
 };
 

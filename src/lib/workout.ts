@@ -184,6 +184,32 @@ export function updateActiveSet(
   };
 }
 
+export function selectActiveSet(
+  state: AppState,
+  exerciseId: string,
+  setId: string,
+  now = new Date().toISOString(),
+): AppState {
+  const workout = state.activeWorkout;
+  if (!workout) throw new Error('Nenhum treino está em andamento.');
+  const exerciseIndex = workout.exercises.findIndex((exercise) => exercise.exerciseId === exerciseId);
+  const setIndex = exerciseIndex >= 0
+    ? workout.exercises[exerciseIndex].sets.findIndex((set) => set.id === setId)
+    : -1;
+  if (exerciseIndex < 0 || setIndex < 0) throw new Error('Série não encontrada.');
+
+  return {
+    ...state,
+    activeWorkout: {
+      ...workout,
+      currentExerciseIndex: exerciseIndex,
+      currentSetIndex: setIndex,
+      updatedAt: now,
+    },
+    updatedAt: now,
+  };
+}
+
 function findNextPending(workout: ActiveWorkout, afterExercise: number, afterSet: number) {
   for (let exerciseIndex = afterExercise; exerciseIndex < workout.exercises.length; exerciseIndex += 1) {
     const startSet = exerciseIndex === afterExercise ? afterSet + 1 : 0;

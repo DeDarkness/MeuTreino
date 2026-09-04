@@ -8,7 +8,11 @@ export function getRestNotificationPermission(): RestNotificationPermission {
 export async function requestRestNotificationPermission(): Promise<RestNotificationPermission> {
   if (getRestNotificationPermission() === 'unsupported') return 'unsupported';
   try {
-    return await Notification.requestPermission();
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      await showAppNotification('Avisos ativados', 'O MeuTreino avisará quando o descanso terminar.', 'meutreino-notificacoes');
+    }
+    return permission;
   } catch {
     return getRestNotificationPermission();
   }
@@ -18,16 +22,24 @@ export async function showRestFinishedNotification(
   exerciseName: string,
   setNumber: number,
 ): Promise<boolean> {
+  return showAppNotification(
+    'Descanso finalizado',
+    `Próxima: ${exerciseName} · Série ${setNumber}`,
+    'meutreino-descanso',
+  );
+}
+
+async function showAppNotification(title: string, body: string, tag: string): Promise<boolean> {
   if (getRestNotificationPermission() !== 'granted' || !('serviceWorker' in navigator)) return false;
 
   try {
     const registration = await navigator.serviceWorker.ready;
     const icon = new URL(`${import.meta.env.BASE_URL}icons/icon-192.png`, window.location.origin).href;
-    await registration.showNotification('Descanso finalizado', {
-      body: `Próxima: ${exerciseName} · Série ${setNumber}`,
+    await registration.showNotification(title, {
+      body,
       icon,
       badge: icon,
-      tag: 'meutreino-descanso',
+      tag,
     });
     return true;
   } catch {
