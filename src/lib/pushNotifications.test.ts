@@ -17,7 +17,10 @@ beforeEach(() => {
   vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
   vi.stubGlobal('Notification', { permission: 'granted' });
   vi.stubGlobal('window', { isSecureContext: true, Notification: {}, PushManager: {}, setTimeout, clearTimeout });
-  vi.stubGlobal('navigator', { onLine: true, serviceWorker: { ready: Promise.resolve({ pushManager: { subscribe, getSubscription: async () => subscription } }) } });
+  vi.stubGlobal('navigator', { onLine: true, serviceWorker: { ready: Promise.resolve({
+    active: { postMessage: (_message: unknown, ports: MessagePort[]) => ports[0].postMessage({ type: 'MEUTREINO_PUSH_READY', protocol: 2 }) },
+    pushManager: { subscribe, getSubscription: async () => subscription },
+  }) } });
   vi.stubGlobal('fetch', fetcher);
   fetcher.mockImplementation(async (url: string) => Response.json(url.endsWith('/config') ? { publicKey: key } : { subscribed: true }));
 });
@@ -38,6 +41,42 @@ function restingWorkout() {
 }
 
 describe('confirmação dos avisos no aparelho', () => {
+  it('solicita a permissão explicitamente antes de conectar uma nova inscrição', async () => {
+    const notification = {
+      permission: 'default',
+      requestPermission: vi.fn(async () => { notification.permission = 'granted'; return 'granted'; }),
+    };
+    vi.stubGlobal('Notification', notification);
+    const push = await import('./pushNotifications');
+    await push.preparePushNotifications();
+    subscribe.mockClear();
+    await push.enablePushNotifications();
+    expect(notification.requestPermission).toHaveBeenCalledOnce();
+    expect(subscribe).toHaveBeenCalledOnce();
+    expect(notification.requestPermission.mock.invocationCallOrder[0]).toBeLessThan(subscribe.mock.invocationCallOrder[0]);
+    expect(push.getPushStatus().enabled).toBe(true);
+  });
+
+  it('não conecta avisos quando o iPhone não concede a permissão', async () => {
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission: vi.fn(async () => 'denied') });
+    const push = await import('./pushNotifications');
+    await push.preparePushNotifications();
+    subscribe.mockClear();
+    await expect(push.enablePushNotifications()).rejects.toThrow('bloqueada');
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(push.getPushStatus().enabled).toBe(false);
+  });
+
+  it('mostra autorização e resultado do serviço sem confundir envio com recebimento', async () => {
+    const push = await enabledPush();
+    fetcher.mockResolvedValue(Response.json({ subscribed: true, testDelivery: { status: 'accepted', scheduledFor: new Date().toISOString(), errorCode: null } }));
+    const report = await push.getPushDiagnostics();
+    expect(report.permission).toBe('granted');
+    expect(report.subscription).toBe(true);
+    expect(report.serverConnected).toBe(true);
+    expect(report.test?.status).toBe('accepted');
+  });
+
   it('confirma somente o horário efetivamente aceito pelo serviço', async () => {
     const push = await enabledPush();
     const workout = restingWorkout();

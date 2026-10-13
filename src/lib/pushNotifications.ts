@@ -23,6 +23,16 @@ export interface PushStatus {
   message: string;
 }
 
+export interface PushDiagnostics {
+  installed: boolean;
+  permission: NotificationPermission | 'unsupported';
+  subscription: boolean;
+  receiverReady: boolean;
+  serverConnected: boolean;
+  test: { status: string; scheduledFor: string; errorCode: string | null } | null;
+  message: string;
+}
+
 const STORAGE_KEY = 'meutreino-push-connection-v1';
 const listeners = new Set<() => void>();
 let connection: PushConnection | null = readConnection();
@@ -32,6 +42,7 @@ let lastSnapshot: string | undefined;
 let retryTimer: number | undefined;
 let retryFailures = 0;
 let desiredRest: PushRest | null = null;
+let desiredRestInitialized = false;
 let status: PushStatus = {
   phase: PUSH_SERVICE_URL ? 'preparing' : 'unconfigured',
   enabled: Boolean(connection?.enabled),
@@ -98,6 +109,47 @@ function supported(): boolean {
   return window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
+async function pushReceiverReady(registration: ServiceWorkerRegistration): Promise<boolean> {
+  if (!registration.active) return false;
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    let finished = false;
+    const finish = (ready: boolean) => {
+      if (finished) return;
+      finished = true;
+      window.clearTimeout(timeout);
+      channel.port1.close();
+      channel.port2.close();
+      resolve(ready);
+    };
+    const timeout = window.setTimeout(() => finish(false), 1500);
+    channel.port1.onmessage = (event) => finish(event.data?.type === 'MEUTREINO_PUSH_READY' && event.data.protocol === 2);
+    registration.active!.postMessage({ type: 'MEUTREINO_PUSH_CHECK' }, [channel.port2]);
+  });
+}
+
+async function ensurePushReceiver(registration: ServiceWorkerRegistration): Promise<void> {
+  if (await pushReceiverReady(registration)) return;
+  updateStatus('preparing', 'Atualizando o recebimento dos avisos no aplicativo…');
+  await registration.update();
+  const installing = registration.installing ?? registration.waiting;
+  registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
+  if (installing && installing.state !== 'activated') {
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        window.clearTimeout(timer);
+        installing.removeEventListener('statechange', check);
+        resolve();
+      };
+      const check = () => { if (installing.state === 'activated' || installing.state === 'redundant') finish(); };
+      const timer = window.setTimeout(finish, 5000);
+      installing.addEventListener('statechange', check);
+      check();
+    });
+  }
+  if (!await pushReceiverReady(registration)) throw new Error('A atualização dos avisos ainda não está ativa. Feche e abra o MeuTreino novamente.');
+}
+
 export function preparePushNotifications(): Promise<void> {
   if (preparation) return preparation;
   if (!PUSH_SERVICE_URL) return Promise.resolve();
@@ -115,6 +167,7 @@ export function preparePushNotifications(): Promise<void> {
         api('/v1/config'),
       ]);
       if (typeof config.publicKey !== 'string') throw new Error('O serviço de avisos ainda está sendo preparado.');
+      await ensurePushReceiver(registration);
       prepared = { registration, publicKey: config.publicKey };
       if (connection?.serviceUrl !== serviceUrl() && connection) {
         connection.enabled = false;
@@ -127,6 +180,7 @@ export function preparePushNotifications(): Promise<void> {
       if (!connection?.enabled || !['scheduling', 'scheduled', 'error'].includes(status.phase)) {
         updateStatus(connection?.enabled ? 'ready' : 'disabled', connection?.enabled ? 'Avisos em segundo plano ativados.' : 'Ative os avisos para receber o fim do descanso com a tela bloqueada.');
       }
+      if (connection?.enabled && desiredRestInitialized) void sendRest(desiredRest, true);
     } catch (cause) {
       preparation = null;
       updateStatus('error', navigator.onLine ? errorMessage(cause) : 'Sem conexão. Os avisos em segundo plano precisam de internet.');
@@ -150,26 +204,44 @@ function publicKeyBytes(publicKey: string): Uint8Array<ArrayBuffer> {
 }
 
 export async function enablePushNotifications(): Promise<void> {
+  if (!supported()) throw new Error('Abra o MeuTreino pelo ícone instalado na Tela de Início para permitir os avisos.');
+  if (Notification.permission === 'denied') throw new Error('Permita os avisos em Ajustes → Notificações → MeuTreino.');
+  // Invoke the permission API synchronously from the tap. Asking via subscribe
+  // alone can fail without a prompt on some iPhone permission states.
+  const permissionPromise = Notification.permission === 'default'
+    ? Notification.requestPermission()
+    : null;
+  if (permissionPromise) {
+    updateStatus('preparing', 'Aguardando a autorização de notificações do iPhone…');
+    try {
+      const permission = await permissionPromise;
+      if (permission !== 'granted') throw new Error(permission === 'denied'
+        ? 'A permissão foi bloqueada. Permita os avisos em Ajustes → Notificações → MeuTreino.'
+        : 'A autorização não foi concluída. Toque em ativar novamente e aceite os avisos.');
+    } catch (cause) {
+      updateStatus('error', errorMessage(cause));
+      throw cause;
+    }
+  }
   if (!prepared) {
     await preparePushNotifications();
     if (!prepared) throw new Error(status.message);
     // A second tap preserves the direct user gesture required by iPhone.
+    updateStatus('disabled', 'Permissão concedida. Toque em ativar novamente para conectar os avisos.');
     throw new Error('Tudo pronto. Toque em ativar novamente para autorizar no iPhone.');
   }
-  if (Notification.permission === 'denied') throw new Error('Permita os avisos em Ajustes → Notificações → MeuTreino.');
-  // Invoke subscribe before any network wait, directly from the user's tap.
-  const subscriptionPromise = prepared.registration.pushManager.subscribe({
-    userVisibleOnly: true, applicationServerKey: publicKeyBytes(prepared.publicKey),
-  });
-  updateStatus('preparing', 'Conectando os avisos deste aparelho…');
   try {
-    const subscription = await subscriptionPromise;
+    updateStatus('preparing', 'Conectando os avisos deste aparelho…');
+    const subscription = await prepared.registration.pushManager.subscribe({
+      userVisibleOnly: true, applicationServerKey: publicKeyBytes(prepared.publicKey),
+    });
     if (!connection || connection.serviceUrl !== serviceUrl()) {
       connection = { deviceId: crypto.randomUUID(), token: randomToken(), enabled: false, revision: 0, acknowledgedRestId: null, serviceUrl: serviceUrl() };
     }
     // Persist the capability before sending, so a failed connection can be retried safely.
     saveConnection();
-    await api(`/v1/devices/${connection.deviceId}`, { method: 'PUT', body: JSON.stringify(subscription.toJSON()) }, true);
+    const registered = await api(`/v1/devices/${connection.deviceId}`, { method: 'PUT', body: JSON.stringify(subscription.toJSON()) }, true);
+    if (registered.subscribed !== true) throw new Error('O serviço não confirmou a conexão deste aparelho.');
     connection.enabled = true;
     saveConnection();
     lastSnapshot = undefined;
@@ -196,6 +268,7 @@ export function isPushRestScheduled(workoutId: string, restEndsAt: string): bool
 }
 
 export async function syncPushRest(workout: ActiveWorkout | null, soundEnabled: boolean, force = false): Promise<void> {
+  desiredRestInitialized = true;
   const nextRest = getPushRest(workout, soundEnabled);
   if (JSON.stringify(nextRest) !== JSON.stringify(desiredRest)) retryFailures = 0;
   desiredRest = nextRest;
@@ -203,7 +276,7 @@ export async function syncPushRest(workout: ActiveWorkout | null, soundEnabled: 
 }
 
 async function sendRest(rest: PushRest | null, force = false): Promise<void> {
-  if (!connection?.enabled || !PUSH_SERVICE_URL) return;
+  if (!connection?.enabled || !PUSH_SERVICE_URL || !prepared) return;
   const snapshot = JSON.stringify(rest);
   if (!force && snapshot === lastSnapshot) return;
   lastSnapshot = snapshot;
@@ -232,7 +305,7 @@ async function sendRest(rest: PushRest | null, force = false): Promise<void> {
 }
 
 export async function retryPushRest(): Promise<void> {
-  if (!connection?.enabled) {
+  if (!connection?.enabled || !prepared) {
     await preparePushNotifications();
     return;
   }
@@ -243,7 +316,41 @@ export async function retryPushRest(): Promise<void> {
 
 export async function testPushNotification(): Promise<void> {
   if (!connection?.enabled) throw new Error('Ative os avisos em segundo plano primeiro.');
-  await api(`/v1/devices/${connection.deviceId}/test`, { method: 'POST' }, true);
+  if (!prepared || !await pushReceiverReady(prepared.registration)) throw new Error('O recebimento dos avisos ainda está sendo atualizado. Reabra o MeuTreino e tente novamente.');
+  if (Notification.permission !== 'granted') throw new Error('Autorize as notificações do iPhone antes de testar.');
+  const result = await api(`/v1/devices/${connection.deviceId}/test`, { method: 'POST' }, true);
+  if (result.scheduled !== true) throw new Error('O serviço não confirmou o agendamento do teste.');
+}
+
+export async function getPushDiagnostics(): Promise<PushDiagnostics> {
+  const standaloneNavigator = navigator as Navigator & { standalone?: boolean };
+  const report: PushDiagnostics = {
+    installed: Boolean(standaloneNavigator.standalone) || Boolean(window.matchMedia?.('(display-mode: standalone)').matches),
+    permission: 'Notification' in window ? Notification.permission : 'unsupported',
+    subscription: false, receiverReady: false, serverConnected: false, test: null,
+    message: 'Os avisos ainda não foram conectados neste aparelho.',
+  };
+  try {
+    const registration = prepared?.registration ?? (navigator.serviceWorker ? await navigator.serviceWorker.getRegistration() : null);
+    report.receiverReady = registration ? await pushReceiverReady(registration) : false;
+    report.subscription = Boolean(await registration?.pushManager?.getSubscription());
+    if (report.permission !== 'granted') {
+      report.message = report.permission === 'denied'
+        ? 'O iPhone bloqueou os avisos. Libere-os em Ajustes → Notificações → MeuTreino.'
+        : 'A autorização do iPhone ainda não foi concedida. Toque em ativar avisos.';
+    } else if (!report.subscription) {
+      report.message = 'A permissão está concedida, mas falta conectar as notificações. Toque em ativar avisos.';
+    }
+    if (connection && report.subscription) {
+      const remote = await api(`/v1/devices/${connection.deviceId}/status`, { method: 'GET' }, true);
+      report.serverConnected = remote.subscribed === true;
+      report.test = remote.testDelivery as PushDiagnostics['test'] ?? null;
+      report.message = report.serverConnected ? 'O iPhone está conectado ao serviço de avisos.' : 'A inscrição no serviço expirou. Ative os avisos novamente.';
+    }
+  } catch (cause) {
+    report.message = errorMessage(cause);
+  }
+  return report;
 }
 
 export async function disablePushNotifications(): Promise<void> {

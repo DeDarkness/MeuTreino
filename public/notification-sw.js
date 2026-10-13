@@ -1,17 +1,26 @@
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'MEUTREINO_PUSH_CHECK') {
+    event.ports?.[0]?.postMessage({ type: 'MEUTREINO_PUSH_READY', protocol: 2 });
+  }
+});
+
 self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
     let payload;
     try { payload = event.data?.json(); } catch { payload = null; }
-    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const visible = windows.some((client) => client.visibilityState === 'visible' && client.url.startsWith(self.registration.scope));
     const icon = new URL('icons/icon-192.png', self.registration.scope).href;
+    const family = payload?.kind === 'test' ? 'meutreino-teste' : 'meutreino-descanso';
     // Apple requires every received push to display a user-visible notification.
     await self.registration.showNotification(payload?.title || 'MeuTreino', {
       body: payload?.body || 'Você recebeu um aviso do MeuTreino.',
       icon,
       badge: icon,
-      tag: payload?.kind === 'test' ? 'meutreino-teste' : 'meutreino-descanso',
-      silent: Boolean(payload?.silent) || visible,
+      // A different rest/test must produce a new alert. Retrying the same id
+      // still replaces its own notification instead of producing duplicates.
+      tag: payload?.id ? `${family}-${payload.id}` : family,
+      // WindowClient.visibilityState can be stale while iOS suspends the app.
+      // Only the explicit sound preference may silence a received notification.
+      silent: Boolean(payload?.silent),
       data: { id: payload?.id ?? null },
     });
   })());

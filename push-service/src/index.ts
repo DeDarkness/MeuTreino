@@ -28,6 +28,20 @@ interface DeviceRecord {
   revision: number;
   rest: PendingAlert | null;
   test: PendingAlert | null;
+  testDelivery?: DeliveryReport | null;
+  restDelivery?: DeliveryReport | null;
+}
+
+interface DeliveryReport {
+  id: string;
+  status: 'scheduled' | 'accepted' | 'retrying' | 'failed' | 'expired' | 'cancelled';
+  scheduledFor: string;
+  acceptedAt: string | null;
+  errorCode: string | null;
+}
+
+function scheduledDelivery(alert: PendingAlert): DeliveryReport {
+  return { id: alert.id, status: 'scheduled', scheduledFor: new Date(alert.endsAt).toISOString(), acceptedAt: null, errorCode: null };
 }
 
 const MAX_BODY_BYTES = 8192;
@@ -52,7 +66,7 @@ export function validSubscription(value: unknown): value is PushSubscription {
     if (endpoint.protocol !== 'https:' || endpoint.port || endpoint.username || endpoint.password || !allowedHost) return false;
     const { p256dh, auth } = value.keys;
     if (typeof p256dh !== 'string' || typeof auth !== 'string') return false;
-    if (!/^[\w-]{86,88}$/.test(p256dh) || !/^[\w-]{22,24}$/.test(auth)) return false;
+    if (!/^[\w-]{87}=?$/.test(p256dh) || !/^[\w-]{22}(==)?$/.test(auth)) return false;
     const key = Buffer.from(p256dh, 'base64url');
     return key.length === 65 && key[0] === 4 && Buffer.from(auth, 'base64url').length === 16;
   } catch {
@@ -106,20 +120,35 @@ export class PushDevice extends DurableObject<Env> {
       if (stored && stored.tokenHash !== hash) return json({ error: 'Aparelho não autorizado.' }, 401);
       const path = new URL(request.url).pathname;
 
-      const isDevicePath = !path.endsWith('/rest') && !path.endsWith('/test');
+      const isDevicePath = !path.endsWith('/rest') && !path.endsWith('/test') && !path.endsWith('/status');
       if (request.method === 'PUT' && isDevicePath) {
         const body = await readBody(request);
         if (!validSubscription(body)) return json({ error: 'Inscrição de notificações inválida.' }, 400);
         const record: DeviceRecord = stored
-          ? { ...stored, subscription: body, rest: null, test: null }
+          ? {
+            ...stored, subscription: body, rest: null, test: null,
+            testDelivery: stored.test && stored.testDelivery ? { ...stored.testDelivery, status: 'cancelled' } : stored.testDelivery,
+            restDelivery: stored.rest && stored.restDelivery ? { ...stored.restDelivery, status: 'cancelled' } : stored.restDelivery,
+          }
           : { tokenHash: hash, subscription: body, revision: 0, rest: null, test: null };
         await this.ctx.storage.put('device', record);
         await this.ctx.storage.deleteAlarm();
         return json({ subscribed: true });
       }
+      if (request.method === 'GET' && path.endsWith('/status') && stored) {
+        return json({
+          subscribed: Boolean(stored.subscription),
+          restDelivery: stored.restDelivery ?? null,
+          testDelivery: stored.testDelivery ?? null,
+        });
+      }
       if (!stored?.subscription) return json({ error: 'Ative os avisos novamente neste aparelho.' }, 410);
       if (request.method === 'DELETE' && isDevicePath) {
-        await this.ctx.storage.put('device', { ...stored, subscription: null, rest: null, test: null });
+        await this.ctx.storage.put('device', {
+          ...stored, subscription: null, rest: null, test: null,
+          testDelivery: stored.test && stored.testDelivery ? { ...stored.testDelivery, status: 'cancelled' } : stored.testDelivery ?? null,
+          restDelivery: stored.rest && stored.restDelivery ? { ...stored.restDelivery, status: 'cancelled' } : stored.restDelivery ?? null,
+        });
         await this.ctx.storage.deleteAlarm();
         return json({ disabled: true });
       }
@@ -130,7 +159,11 @@ export class PushDevice extends DurableObject<Env> {
         if (revision < stored.revision) return json({ error: 'Pedido substituído por um descanso mais recente.' }, 409);
         if (revision === stored.revision) return json({ scheduled: Boolean(stored.rest), restId: stored.rest?.id ?? null, revision });
         const rest = makeAlert(body.rest, Date.now());
-        const record = { ...stored, revision, rest };
+        const record = {
+          ...stored, revision, rest,
+          restDelivery: rest ? scheduledDelivery(rest)
+            : stored.restDelivery ? { ...stored.restDelivery, status: 'cancelled' as const } : null,
+        };
         await this.ctx.storage.put('device', record);
         await this.setNextAlarm(record);
         return json({ scheduled: Boolean(rest), restId: rest?.id ?? null, revision });
@@ -143,7 +176,7 @@ export class PushDevice extends DurableObject<Env> {
           body: 'O aviso em segundo plano chegou. Volte ao MeuTreino para continuar.',
           silent: false, kind: 'test', attempts: 0,
         };
-        const record = { ...stored, test };
+        const record = { ...stored, test, testDelivery: scheduledDelivery(test) };
         await this.ctx.storage.put('device', record);
         await this.setNextAlarm(record);
         return json({ scheduled: true, delaySeconds: 10 });
@@ -166,7 +199,11 @@ export class PushDevice extends DurableObject<Env> {
       for (const slot of ['rest', 'test'] as const) {
         const alert = record[slot];
         if (!alert || alert.endsAt > Date.now()) continue;
+        const deliverySlot = slot === 'test' ? 'testDelivery' : 'restDelivery';
+        const delivery = record[deliverySlot] ?? scheduledDelivery(alert);
+        record[deliverySlot] = delivery;
         if (alert.expiresAt <= Date.now()) {
+          delivery.status = 'expired';
           record[slot] = null;
           continue;
         }
@@ -187,18 +224,36 @@ export class PushDevice extends DurableObject<Env> {
             signal: AbortSignal.timeout(8000), redirect: 'error',
           });
           if (response.status === 404 || response.status === 410) {
+            delivery.status = 'failed';
+            delivery.errorCode = `HTTP_${response.status}`;
             record.subscription = null;
             record.rest = null;
             record.test = null;
             break;
           }
-          if (!response.ok) throw new Error('O provedor não aceitou o aviso.');
+          if (!response.ok) {
+            let reason = `HTTP_${response.status}`;
+            try {
+              const details: unknown = await response.json();
+              if (isRecord(details) && typeof details.reason === 'string' && /^[\w-]{1,80}$/.test(details.reason)) reason = details.reason;
+            } catch { /* Keep the HTTP code without exposing provider payloads. */ }
+            throw new Error(reason);
+          }
+          delivery.status = 'accepted';
+          delivery.acceptedAt = new Date().toISOString();
+          delivery.errorCode = null;
           record[slot] = null;
-        } catch {
+        } catch (cause) {
+          delivery.errorCode = cause instanceof Error && /^[\w-]{1,80}$/.test(cause.message) ? cause.message : 'SEND_FAILED';
           // Short, bounded retries: never send a stale gym-rest alert hours later.
           alert.attempts += 1;
-          if (alert.attempts >= 4 || alert.expiresAt <= Date.now() + 5000) record[slot] = null;
-          else alert.endsAt = Date.now() + 5000;
+          if (alert.attempts >= 4 || alert.expiresAt <= Date.now() + 5000) {
+            record[slot] = null;
+            delivery.status = 'failed';
+          } else {
+            alert.endsAt = Date.now() + 5000;
+            delivery.status = 'retrying';
+          }
         }
       }
       await this.ctx.storage.put('device', record);
@@ -225,7 +280,7 @@ export default {
       if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) response = json({ error: 'O serviço ainda está sendo preparado.' }, 503);
       else if (url.pathname === '/v1/config' && request.method === 'GET') response = json({ publicKey: env.VAPID_PUBLIC_KEY });
       else {
-        const match = url.pathname.match(/^\/v1\/devices\/([a-f0-9-]{36})(?:\/(rest|test))?$/);
+        const match = url.pathname.match(/^\/v1\/devices\/([a-f0-9-]{36})(?:\/(rest|test|status))?$/);
         if (!match) response = json({ error: 'Operação não encontrada.' }, 404);
         else if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) response = json({ error: 'Pedido muito grande.' }, 413);
         else if (!(await env.API_LIMITER.limit({ key: `meutreino:${request.headers.get('cf-connecting-ip') ?? 'local'}` })).success) response = json({ error: 'Aguarde um minuto e tente novamente.' }, 429);

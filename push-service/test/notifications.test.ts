@@ -50,6 +50,12 @@ describe('serviço de avisos em segundo plano', () => {
     expect(stolen.status).toBe(401);
   });
 
+  it('aceita chaves base64url válidas com ou sem preenchimento', async () => {
+    const id = crypto.randomUUID();
+    const padded = { ...subscription, keys: { p256dh: subscription.keys.p256dh + '=', auth: subscription.keys.auth + '==' } };
+    expect((await request(id, 'PUT', '', padded)).status).toBe(200);
+  });
+
   it('um reagendamento antigo não pode restaurar o descanso cancelado', async () => {
     const id = crypto.randomUUID();
     await request(id, 'PUT', '', subscription);
@@ -68,6 +74,24 @@ describe('serviço de avisos em segundo plano', () => {
     const stored = await readDevice(id);
     expect(stored?.rest?.id).toBe('rest-1');
     expect(stored?.test?.id).toMatch(/^test-/);
+  });
+
+  it('informa o erro do provedor no diagnóstico sem expor credenciais', async () => {
+    const id = crypto.randomUUID();
+    await request(id, 'PUT', '', subscription);
+    await request(id, 'POST', '/test');
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ reason: 'BadJwtToken' }, { status: 403 }));
+    await runInDurableObject(bindings.DEVICES.getByName(id), async (instance: PushDevice, state) => {
+      const stored = (await state.storage.get<StoredDevice>('device'))!;
+      Object.assign(stored.test!, { endsAt: Date.now() - 1 });
+      await state.storage.put('device', stored);
+      await instance.alarm();
+    });
+    const response = await request(id, 'GET', '/status');
+    const report = await response.json() as { subscribed: boolean; testDelivery: { status: string; errorCode: string } };
+    expect(report.testDelivery).toMatchObject({ status: 'retrying', errorCode: 'BadJwtToken' });
+    expect(JSON.stringify(report)).not.toContain(subscription.endpoint);
+    expect(JSON.stringify(report)).not.toContain(token);
   });
 
   it('gera um Web Push cifrado no runtime real da Cloudflare e não repete o envio bem-sucedido', async () => {

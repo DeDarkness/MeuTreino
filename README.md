@@ -71,6 +71,8 @@ Após publicar, configure o endereço público `workers.dev` em `src/lib/pushCon
 
 No iPhone: abra pelo ícone da Tela de Início → Ajustes → Ativar avisos em segundo plano → aceite a permissão → Testar com a tela bloqueada. O teste chega após 10 segundos sem substituir o descanso em andamento. As inscrições são específicas do aparelho e não entram no backup JSON do treino.
 
+Se não aparecer um aviso, use **Verificar avisos** nos Ajustes. A tela distingue autorização do iPhone, inscrição local, versão do recebimento, conexão com o serviço e resultado do teste. “Enviado ao sistema do iPhone” indica aceitação pelo provedor de push, não confirmação de exibição ou som no aparelho. Os resultados do envio são acessíveis somente com a credencial daquele dispositivo, sem expor chaves ou endpoints.
+
 ## Rodar no computador durante o desenvolvimento
 
 Pré-requisitos: Node.js 20.19 ou superior e npm.

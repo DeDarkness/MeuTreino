@@ -171,7 +171,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 6.1 · PWA pessoal e offline</span></footer>
+      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 6.1.1 · PWA pessoal e offline</span></footer>
     </section>
   );
 }
