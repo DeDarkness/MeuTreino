@@ -124,6 +124,10 @@ export class PushDevice extends DurableObject<Env> {
       if (request.method === 'PUT' && isDevicePath) {
         const body = await readBody(request);
         if (!validSubscription(body)) return json({ error: 'Inscrição de notificações inválida.' }, 400);
+        // Automatic reconnection must not cancel an already scheduled rest or test.
+        if (stored?.subscription?.endpoint === body.endpoint
+          && stored.subscription.keys.p256dh === body.keys.p256dh
+          && stored.subscription.keys.auth === body.keys.auth) return json({ subscribed: true });
         const record: DeviceRecord = stored
           ? {
             ...stored, subscription: body, rest: null, test: null,
@@ -221,7 +225,8 @@ export class PushDevice extends DurableObject<Env> {
           const response = await fetch(details.endpoint, {
             method: 'POST', headers: details.headers,
             body: details.body ? new Uint8Array(details.body) : undefined,
-            signal: AbortSignal.timeout(8000), redirect: 'error',
+            // Workers supports only follow/manual. Never forward push credentials on redirects.
+            signal: AbortSignal.timeout(8000), redirect: 'manual',
           });
           if (response.status === 404 || response.status === 410) {
             delivery.status = 'failed';
@@ -244,7 +249,8 @@ export class PushDevice extends DurableObject<Env> {
           delivery.errorCode = null;
           record[slot] = null;
         } catch (cause) {
-          delivery.errorCode = cause instanceof Error && /^[\w-]{1,80}$/.test(cause.message) ? cause.message : 'SEND_FAILED';
+          delivery.errorCode = cause instanceof Error && /^[\w-]{1,80}$/.test(cause.message) ? cause.message
+            : cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError') ? 'SEND_TIMEOUT' : 'SEND_FAILED';
           // Short, bounded retries: never send a stale gym-rest alert hours later.
           alert.attempts += 1;
           if (alert.attempts >= 4 || alert.expiresAt <= Date.now() + 5000) {

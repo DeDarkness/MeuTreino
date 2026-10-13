@@ -13,6 +13,7 @@ const fetcher = vi.fn();
 beforeEach(() => {
   vi.resetModules();
   fetcher.mockReset();
+  subscribe.mockClear();
   const values = new Map<string, string>();
   vi.stubGlobal('localStorage', { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
   vi.stubGlobal('Notification', { permission: 'granted' });
@@ -41,6 +42,46 @@ function restingWorkout() {
 }
 
 describe('confirmação dos avisos no aparelho', () => {
+  it('fica ativo automaticamente com uma inscrição já autorizada, sem novo pedido de permissão', async () => {
+    const requestPermission = vi.fn();
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission });
+    const push = await import('./pushNotifications');
+    await push.preparePushNotifications();
+    expect(push.getPushStatus().enabled).toBe(true);
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(fetcher.mock.calls.some(([, options]) => options.method === 'PUT')).toBe(true);
+  });
+
+  it('reconecta a preferência antiga desativada quando a inscrição continua autorizada', async () => {
+    localStorage.setItem('meutreino-push-connection-v1', JSON.stringify({
+      deviceId: crypto.randomUUID(), token: 'A'.repeat(43), enabled: false,
+      revision: 12, acknowledgedRestId: null, serviceUrl: 'https://meutreino-push.example',
+    }));
+    const push = await import('./pushNotifications');
+    await push.preparePushNotifications();
+    expect(push.getPushStatus().enabled).toBe(true);
+    expect(JSON.parse(localStorage.getItem('meutreino-push-connection-v1')!).revision).toBe(12);
+  });
+
+  it('um único teste pede permissão, conecta e agenda sem botão separado de ativação', async () => {
+    const notification = {
+      permission: 'default',
+      requestPermission: vi.fn(async () => { notification.permission = 'granted'; return 'granted'; }),
+    };
+    vi.stubGlobal('Notification', notification);
+    fetcher.mockImplementation(async (url: string) => Response.json(url.endsWith('/config')
+      ? { publicKey: key } : url.endsWith('/test') ? { scheduled: true } : { subscribed: true }));
+    const push = await import('./pushNotifications');
+    await push.preparePushNotifications();
+    expect(notification.requestPermission).not.toHaveBeenCalled();
+    await push.testPushNotification();
+    expect(notification.requestPermission).toHaveBeenCalledOnce();
+    expect(subscribe).toHaveBeenCalledOnce();
+    expect(fetcher.mock.calls.filter(([url]) => url.endsWith('/test'))).toHaveLength(1);
+    expect(push.getPushStatus().enabled).toBe(true);
+  });
+
   it('solicita a permissão explicitamente antes de conectar uma nova inscrição', async () => {
     const notification = {
       permission: 'default',

@@ -10,7 +10,8 @@ import { useWallpaper } from './hooks/useWallpaper';
 import { useRestAlert } from './hooks/useRestAlert';
 import { useWorkoutStore } from './hooks/useWorkoutStore';
 import { usePushNotifications } from './hooks/usePushNotifications';
-import { getRestNotificationPermission, requestRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
+import { getRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
+import { enablePushNotifications } from './lib/pushNotifications';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -108,8 +109,8 @@ export default function App() {
 
   const openWorkout = async (plan: WorkoutPlan) => {
     if (isStandalone && notificationPermission === 'default') {
-      const permission = await requestRestNotificationPermission();
-      setNotificationPermission(permission);
+      try { await enablePushNotifications(); } catch { /* Notification failures must not prevent training. */ }
+      setNotificationPermission(getRestNotificationPermission());
     }
     if (state.activeWorkout) {
       if (state.activeWorkout.planId !== plan.id) return;
@@ -153,12 +154,6 @@ export default function App() {
     const granted = await navigator.storage.persist();
     setStoragePersistent(granted);
     return granted;
-  };
-
-  const requestNotifications = async () => {
-    const permission = await requestRestNotificationPermission();
-    setNotificationPermission(permission);
-    return permission;
   };
 
   if (showActiveWorkout && activeWorkout) {
@@ -236,7 +231,6 @@ export default function App() {
           }}
           onClose={() => setShowActiveWorkout(false)}
           notificationPermission={notificationPermission}
-          onRequestNotifications={requestNotifications}
           pushRestMessage={pushStatus.enabled && activeWorkout.restEndsAt ? pushStatus.message : null}
         />
         <BottomNav
@@ -321,10 +315,7 @@ export default function App() {
               setActiveTab('home');
             }}
             onRequestPersistence={requestPersistence}
-            notificationPermission={notificationPermission}
-            onRequestNotifications={requestNotifications}
             pushStatus={pushStatus}
-            activeWorkout={activeWorkout}
             onNotificationPermissionChange={() => setNotificationPermission(getRestNotificationPermission())}
           />
         ) : null}

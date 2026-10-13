@@ -76,6 +76,18 @@ describe('serviço de avisos em segundo plano', () => {
     expect(stored?.test?.id).toMatch(/^test-/);
   });
 
+  it('reconectar a mesma inscrição não cancela nem reagenda o descanso ou o teste', async () => {
+    const id = crypto.randomUUID();
+    await request(id, 'PUT', '', subscription);
+    await request(id, 'PUT', '/rest', { revision: 9, rest: rest() });
+    await request(id, 'POST', '/test');
+    const before = await readDevice(id);
+    const alarmBefore = await runInDurableObject(bindings.DEVICES.getByName(id), (_instance, state) => state.storage.getAlarm());
+    expect((await request(id, 'PUT', '', subscription)).status).toBe(200);
+    expect(await readDevice(id)).toEqual(before);
+    expect(await runInDurableObject(bindings.DEVICES.getByName(id), (_instance, state) => state.storage.getAlarm())).toBe(alarmBefore);
+  });
+
   it('informa o erro do provedor no diagnóstico sem expor credenciais', async () => {
     const id = crypto.randomUUID();
     await request(id, 'PUT', '', subscription);
@@ -109,8 +121,28 @@ describe('serviço de avisos em segundo plano', () => {
     expect(send).toHaveBeenCalledTimes(1);
     const options = send.mock.calls[0][1]!;
     expect(options.headers).toMatchObject({ 'Content-Encoding': 'aes128gcm', Urgency: 'high' });
+    expect(options.redirect).toBe('manual');
     expect((options.body as Uint8Array).byteLength).toBeGreaterThan(100);
     expect((await readDevice(id))?.rest).toBeNull();
+  });
+
+  it('não segue redirecionamentos que poderiam expor a autorização do push', async () => {
+    const id = crypto.randomUUID();
+    await request(id, 'PUT', '', subscription);
+    await request(id, 'POST', '/test');
+    const send = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(null, {
+      status: 307, headers: { Location: 'https://outro.example/receber' },
+    }));
+    await runInDurableObject(bindings.DEVICES.getByName(id), async (instance: PushDevice, state) => {
+      const stored = (await state.storage.get<StoredDevice>('device'))!;
+      Object.assign(stored.test!, { endsAt: Date.now() - 1 });
+      await state.storage.put('device', stored);
+      await instance.alarm();
+    });
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0][1]?.redirect).toBe('manual');
+    const report = await (await request(id, 'GET', '/status')).json() as { testDelivery: { errorCode: string; status: string } };
+    expect(report.testDelivery).toMatchObject({ status: 'retrying', errorCode: 'HTTP_307' });
   });
 
   it('descarta avisos expirados e remove inscrições rejeitadas pelo provedor', async () => {

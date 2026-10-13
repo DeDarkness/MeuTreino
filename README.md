@@ -16,7 +16,7 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 - Descanso não bloqueante: navegue pelo app enquanto o contador continua em um painel flutuante.
 - Edição de carga e repetições de qualquer série durante a sessão em andamento.
 - Alerta sonoro reforçado, com teste nos Ajustes.
-- Web Push de fim do descanso, agendado pelo serviço Cloudflare e recebido mesmo com a tela bloqueada, após ativação no app instalado.
+- Web Push de fim do descanso, agendado pelo serviço Cloudflare e recebido com a tela bloqueada; ligado por padrão após autorização no iPhone.
 - Confirmação de agendamento, reagendamento com `+15 s`, cancelamento e teste independente de 10 segundos.
 - Sessão ativa restaurada após fechar ou recarregar o app.
 - Painel de evolução com gráfico por exercício, carga, repetições, volume e força estimada.
@@ -47,7 +47,7 @@ Depois que o site estiver publicado:
 
 O ícone MeuTreino aparecerá na Tela de Início e abrirá em janela própria. O primeiro acesso precisa de internet para baixar e guardar os arquivos; depois o app abre offline.
 
-> A tela pode apagar normalmente durante o descanso. Ative os avisos em segundo plano nos Ajustes do MeuTreino e confira a mensagem de agendamento antes de bloquear a tela. O Web Push exige internet e pode sofrer atrasos; o som segue as configurações do iPhone. Sem esse serviço, o alerta local depende da execução do Web App. Treinar, registrar séries e consultar histórico continua funcionando offline.
+> A tela pode apagar normalmente durante o descanso. Use Testar notificações nos Ajustes do MeuTreino para autorizar o iPhone e confira a mensagem de agendamento antes de bloquear a tela. Depois da autorização, os avisos ficam ligados automaticamente. O Web Push exige internet e pode sofrer atrasos; o som segue as configurações do iPhone. Treinar, registrar séries e consultar histórico continua funcionando offline.
 
 ## Serviço gratuito de notificações
 
@@ -69,9 +69,9 @@ O login abre a autorização oficial no navegador. As chaves são geradas uma ve
 
 Após publicar, configure o endereço público `workers.dev` em `src/lib/pushConfig.ts` ou na variável de build `VITE_PUSH_SERVICE_URL`, recompile o PWA e publique pelo GitHub Pages. O endereço é público; a chave privada nunca deve entrar no frontend. O serviço não exige domínio próprio ou plano pago e permanece sujeito aos limites do plano Free.
 
-No iPhone: abra pelo ícone da Tela de Início → Ajustes → Ativar avisos em segundo plano → aceite a permissão → Testar com a tela bloqueada. O teste chega após 10 segundos sem substituir o descanso em andamento. As inscrições são específicas do aparelho e não entram no backup JSON do treino.
+No iPhone: abra pelo ícone da Tela de Início → Ajustes → Testar notificações → aceite a permissão, se solicitada → bloqueie a tela. O serviço agenda o teste para 10 segundos depois, sem substituir o descanso em andamento. Após autorização, os avisos ficam ativos automaticamente; inscrições existentes são reconectadas ao abrir o app, sem cancelar alarmes pendentes. Para bloquear os avisos, use Ajustes → Notificações → MeuTreino no próprio iPhone. As inscrições são específicas do aparelho e não entram no backup JSON do treino.
 
-Se não aparecer um aviso, use **Verificar avisos** nos Ajustes. A tela distingue autorização do iPhone, inscrição local, versão do recebimento, conexão com o serviço e resultado do teste. “Enviado ao sistema do iPhone” indica aceitação pelo provedor de push, não confirmação de exibição ou som no aparelho. Os resultados do envio são acessíveis somente com a credencial daquele dispositivo, sem expor chaves ou endpoints.
+O resultado do teste aparece automaticamente ao voltar ao app, com detalhes de autorização do iPhone, inscrição local, recebimento e conexão com o serviço. “Teste enviado ao sistema do iPhone” indica aceitação pelo provedor de push, não confirmação de exibição ou som no aparelho. Os resultados são acessíveis somente com a credencial daquele dispositivo, sem expor chaves ou endpoints. No transporte, o Worker usa `redirect: 'manual'`, compatível com a Cloudflare e sem encaminhar credenciais em redirecionamentos.
 
 ## Rodar no computador durante o desenvolvimento
 

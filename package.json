@@ -1,7 +1,7 @@
 {
   "name": "meutreino",
   "private": true,
-  "version": "6.1.1",
+  "version": "6.1.2",
   "type": "module",
   "engines": {
     "node": ">=20.19.0"

@@ -57,7 +57,6 @@ export interface ActiveWorkoutScreenProps {
   onAbandon: () => void;
   onClose: () => void;
   notificationPermission: RestNotificationPermission;
-  onRequestNotifications: () => Promise<RestNotificationPermission>;
   pushRestMessage: string | null;
 }
 
@@ -79,7 +78,6 @@ export function ActiveWorkoutScreen({
   onAbandon,
   onClose,
   notificationPermission,
-  onRequestNotifications,
   pushRestMessage,
 }: ActiveWorkoutScreenProps) {
   const now = useCurrentTime();
@@ -180,7 +178,7 @@ export function ActiveWorkoutScreen({
         >
           <div className="active-workout__progress-fill" style={{ width: `${progress * 100}%` }} />
         </div>
-        <NotificationStatus permission={notificationPermission} onRequest={onRequestNotifications} />
+        <NotificationStatus permission={notificationPermission} />
         {pushRestMessage ? <p className="active-workout__push-status" role="status"><BellRing size={15} />{pushRestMessage}</p> : null}
       </section>
 
@@ -545,19 +543,17 @@ function SetControl({
 
 function NotificationStatus({
   permission,
-  onRequest,
 }: {
   permission: RestNotificationPermission;
-  onRequest: () => Promise<RestNotificationPermission>;
 }) {
   if (permission === 'granted') {
     return <div className="active-workout__notification-status is-active"><BellRing aria-hidden="true" size={15} /> Permissão de notificações concedida</div>;
   }
   if (permission === 'default') {
     return (
-      <button className="active-workout__notification-status" type="button" onClick={() => void onRequest()}>
-        <BellRing aria-hidden="true" size={15} /> Ativar avisos de descanso
-      </button>
+      <div className="active-workout__notification-status">
+        <BellRing aria-hidden="true" size={15} /> Autorize os avisos em Ajustes → Testar notificações
+      </div>
     );
   }
   return (

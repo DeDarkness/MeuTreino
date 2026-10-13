@@ -448,6 +448,8 @@ svg {
 .push-diagnostics dt { color: var(--muted-strong); flex: 1; }
 .push-diagnostics dd { margin: 0; flex: 1; text-align: right; color: var(--text); overflow-wrap: anywhere; }
 .push-diagnostics p { margin: 10px 0 0; color: var(--muted-strong); font-size: 0.76rem; line-height: 1.5; }
+.push-diagnostics details { margin-top: 8px; }
+.push-diagnostics summary { min-height: 44px; display: flex; align-items: center; color: var(--muted-strong); cursor: pointer; font-size: 0.76rem; }
 .active-workout__push-status { display: flex; align-items: center; gap: 7px; font-size: 0.76rem; line-height: 1.45; color: var(--muted-strong); }
 
 .day-picker__button {

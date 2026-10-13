@@ -1,11 +1,10 @@
-import { BellRing, Check, Database, Download, Info, LockKeyhole, Smartphone, Trash2, Upload, Volume2 } from 'lucide-react';
+import { BellRing, Check, Database, Download, LockKeyhole, Smartphone, Trash2, Upload, Volume2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import { PushNotificationSettings } from '../components/PushNotificationSettings';
 import type { PushStatus } from '../lib/pushNotifications';
-import type { RestNotificationPermission } from '../lib/notifications';
 import { playRestAlert, primeRestAlertAudio } from '../lib/restAlert';
-import type { ActiveWorkout, Preferences } from '../types';
+import type { Preferences } from '../types';
 
 type SettingsScreenProps = {
   preferences: Preferences;
@@ -16,10 +15,7 @@ type SettingsScreenProps = {
   onImport: (file: File) => Promise<void>;
   onClear: () => Promise<void>;
   onRequestPersistence: () => Promise<boolean>;
-  notificationPermission: RestNotificationPermission;
-  onRequestNotifications: () => Promise<RestNotificationPermission>;
   pushStatus: PushStatus;
-  activeWorkout: ActiveWorkout | null;
   onNotificationPermissionChange: () => void;
 };
 
@@ -32,10 +28,7 @@ export function SettingsScreen({
   onImport,
   onClear,
   onRequestPersistence,
-  notificationPermission,
-  onRequestNotifications,
   pushStatus,
-  activeWorkout,
   onNotificationPermissionChange,
 }: SettingsScreenProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,17 +57,7 @@ export function SettingsScreen({
       {message ? <div className="toast-message" role="status">{message}<button type="button" onClick={() => setMessage(null)}>×</button></div> : null}
 
       <SettingsGroup title="Alertas do descanso" icon={<BellRing />}>
-        <PushNotificationSettings status={pushStatus} workout={activeWorkout} soundEnabled={preferences.soundEnabled} onPermissionChange={onNotificationPermissionChange} />
-        {notificationPermission === 'granted' ? (
-          <div className="installed-state"><Check /><div><strong>Notificações autorizadas</strong><p>O iPhone pode mostrar o aviso quando o descanso terminar.</p></div></div>
-        ) : notificationPermission === 'default' ? (
-          <button className="setting-action" type="button" onClick={() => void (async () => {
-            const permission = await onRequestNotifications();
-            setMessage(permission === 'granted' ? 'Notificações ativadas.' : 'A permissão de notificações não foi concedida.');
-          })()}><BellRing /> <span><strong>Ativar notificações</strong><small>O iPhone perguntará se você aceita receber os avisos.</small></span></button>
-        ) : (
-          <p className="settings-note"><Info size={16} /> {notificationPermission === 'denied' ? 'As notificações estão bloqueadas. Ative-as em Ajustes → Notificações → MeuTreino.' : 'Instale o MeuTreino na Tela de Início para permitir notificações no iPhone.'}</p>
-        )}
+        <PushNotificationSettings status={pushStatus} onPermissionChange={onNotificationPermissionChange} />
         <ToggleRow
           label="Som ao terminar"
           description="Toca um aviso reforçado de aproximadamente 3 segundos."
@@ -171,7 +154,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 6.1.1 · PWA pessoal e offline</span></footer>
+      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 6.1.2 · PWA pessoal e offline</span></footer>
     </section>
   );
 }
