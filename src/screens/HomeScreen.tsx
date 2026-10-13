@@ -26,12 +26,9 @@ type HomeScreenProps = {
 };
 
 const WORKOUT_DAYS = [
-  { planId: 'plan-segunda', short: 'SEG', label: 'Segunda' },
-  { planId: 'plan-terca', short: 'TER', label: 'Terça' },
-  { planId: 'plan-quarta', short: 'QUA', label: 'Quarta' },
-  { planId: 'plan-quinta', short: 'QUI', label: 'Quinta' },
-  { planId: 'plan-sexta', short: 'SEX', label: 'Sexta' },
-  { planId: 'plan-sabado', short: 'SÁB', label: 'Sábado' },
+  { planId: 'plan-full-body-a', short: 'SEG', label: 'Segunda', workout: 'A' },
+  { planId: 'plan-full-body-b', short: 'QUA', label: 'Quarta', workout: 'B' },
+  { planId: 'plan-full-body-c', short: 'SEX', label: 'Sexta', workout: 'C' },
 ] as const;
 
 export function HomeScreen({
@@ -118,7 +115,7 @@ export function HomeScreen({
                   key={day.planId}
                   onClick={() => setSelectedPlanId(day.planId)}
                 >
-                  <span>{day.short}</span><strong>{day.label.slice(0, 1)}</strong>
+                  <span>{day.short}</span><strong>{day.workout}</strong>
                   {inProgress ? <i aria-label="Em andamento" /> : null}
                 </button>
               );

@@ -1,34 +1,30 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AppState } from '../types';
-import { createSeedState } from './database';
+import { createSeedState, validateAppState } from './database';
 import { createWeeklyWorkoutPlans, getSuggestedPlanId, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION } from './starterPlans';
 
 describe('treinos semanais prontos', () => {
-  it('cadastra os seis dias e os 39 exercícios informados', () => {
+  it('cadastra o Full Body A/B/C com os 27 exercícios e 69 séries informados', () => {
     const plans = createWeeklyWorkoutPlans('2026-09-02T12:00:00.000Z');
-    expect(plans.map((plan) => plan.name)).toEqual([
-      'Segunda-feira',
-      'Terça-feira',
-      'Quarta-feira',
-      'Quinta-feira',
-      'Sexta-feira',
-      'Sábado',
-    ]);
-    expect(plans.reduce((total, plan) => total + plan.exercises.length, 0)).toBe(39);
+    expect(plans.map((plan) => plan.name)).toEqual(['Full Body A', 'Full Body B', 'Full Body C']);
+    expect(plans.reduce((total, plan) => total + plan.exercises.length, 0)).toBe(27);
     expect(plans.reduce(
       (total, plan) => total + plan.exercises.reduce((sets, item) => sets + item.targetSets, 0),
       0,
-    )).toBe(130);
-    expect(plans[0].exercises[0]).toMatchObject({ targetSets: 3, targetReps: 12, restSeconds: 120 });
-    expect(plans[0].exercises[0].notes).toContain('8–12');
+    )).toBe(69);
+    expect(plans.map((plan) => plan.exercises.reduce((sets, item) => sets + item.targetSets, 0))).toEqual([22, 23, 24]);
+    expect(plans[0].exercises[0]).toMatchObject({ targetSets: 4, targetReps: 8, restSeconds: 180 });
+    expect(plans[0].exercises[0].notes).toContain('5–8 repetições · RIR 1–2');
+    expect(plans[0].exercises[5].supersetGroup).toBe('A');
+    expect(plans[0].exercises[6].supersetGroup).toBe('A');
   });
 
   it('sugere o treino correspondente ao dia atual', () => {
-    expect(getSuggestedPlanId(1)).toBe('plan-segunda');
-    expect(getSuggestedPlanId(3)).toBe('plan-quarta');
-    expect(getSuggestedPlanId(6)).toBe('plan-sabado');
-    expect(getSuggestedPlanId(0)).toBe('plan-segunda');
+    expect(getSuggestedPlanId(1)).toBe('plan-full-body-a');
+    expect(getSuggestedPlanId(3)).toBe('plan-full-body-b');
+    expect(getSuggestedPlanId(5)).toBe('plan-full-body-c');
+    expect(getSuggestedPlanId(0)).toBe('plan-full-body-a');
   });
 
   it('substitui somente as fichas de exemplo e preserva dados pessoais', () => {
@@ -45,9 +41,43 @@ describe('treinos semanais prontos', () => {
 
     const upgraded = installWeeklyWorkoutPlans(legacyState, '2026-09-02T12:00:00.000Z');
     expect(upgraded.starterPlanVersion).toBe(STARTER_PLAN_VERSION);
-    expect(upgraded.plans).toHaveLength(7);
+    expect(upgraded.plans).toHaveLength(4);
     expect(upgraded.plans.some((plan) => plan.id === 'plano-pessoal')).toBe(true);
     expect(upgraded.plans.some((plan) => plan.id === 'plan-treino-a')).toBe(false);
+  });
+
+  it('troca a rotina antiga, mas mantém planos pessoais e o histórico', () => {
+    const currentState = createSeedState('2026-09-01T12:00:00.000Z');
+    const oldBundledPlan = { ...currentState.plans[0], id: 'plan-segunda', name: 'Segunda-feira' };
+    const personalPlan = { ...currentState.plans[1], id: 'plano-pessoal', name: 'Meu plano pessoal' };
+    const history = [{
+      id: 'historico-antigo',
+      planId: 'plan-segunda',
+      planName: 'Segunda-feira',
+      startedAt: '2026-08-25T12:00:00.000Z',
+      finishedAt: '2026-08-25T13:00:00.000Z',
+      durationSeconds: 3600,
+      exercises: [],
+    }];
+    const upgraded = installWeeklyWorkoutPlans({
+      ...currentState,
+      starterPlanVersion: 1,
+      plans: [oldBundledPlan, personalPlan],
+      history,
+    }, '2026-09-02T12:00:00.000Z');
+
+    expect(upgraded.plans.map((plan) => plan.id)).toEqual([
+      'plan-full-body-a',
+      'plan-full-body-b',
+      'plan-full-body-c',
+      'plano-pessoal',
+    ]);
+    expect(upgraded.history).toEqual(history);
+  });
+
+  it('aceita os dados da versão anterior para executar a migração', () => {
+    const previousVersion = { ...createSeedState(), starterPlanVersion: 1 };
+    expect(validateAppState(previousVersion).starterPlanVersion).toBe(1);
   });
 
   it('remove somente uma sessão de exemplo que ainda não foi usada', () => {

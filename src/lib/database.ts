@@ -263,8 +263,11 @@ export function validateAppState(value: unknown): AppState {
   if (value.schemaVersion !== APP_STATE_SCHEMA_VERSION) {
     issues.push(`schemaVersion incompatível (esperado ${APP_STATE_SCHEMA_VERSION})`);
   }
-  if (value.starterPlanVersion !== undefined && value.starterPlanVersion !== STARTER_PLAN_VERSION) {
-    issues.push(`starterPlanVersion incompatível (esperado ${STARTER_PLAN_VERSION})`);
+  if (
+    value.starterPlanVersion !== undefined
+    && (!isNonNegativeInteger(value.starterPlanVersion) || value.starterPlanVersion > STARTER_PLAN_VERSION)
+  ) {
+    issues.push(`starterPlanVersion incompatível (máximo ${STARTER_PLAN_VERSION})`);
   }
   if (!Array.isArray(value.plans)) {
     issues.push('plans deve ser uma lista');

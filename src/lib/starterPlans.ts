@@ -1,21 +1,32 @@
 import type { AppState, Exercise, WorkoutPlan } from '../types';
 
-export const STARTER_PLAN_VERSION = 1 as const;
+export const STARTER_PLAN_VERSION = 2 as const;
 
 const PLAN_BY_WEEKDAY = [
-  'plan-segunda',
+  'plan-full-body-a',
+  'plan-full-body-a',
+  'plan-full-body-b',
+  'plan-full-body-b',
+  'plan-full-body-c',
+  'plan-full-body-c',
+  'plan-full-body-a',
+] as const;
+
+const LEGACY_SAMPLE_PLAN_IDS = new Set(['plan-treino-a', 'plan-treino-b']);
+const BUNDLED_PLAN_IDS = new Set([
   'plan-segunda',
   'plan-terca',
   'plan-quarta',
   'plan-quinta',
   'plan-sexta',
   'plan-sabado',
-] as const;
-
-const LEGACY_SAMPLE_PLAN_IDS = new Set(['plan-treino-a', 'plan-treino-b']);
+  'plan-full-body-a',
+  'plan-full-body-b',
+  'plan-full-body-c',
+]);
 
 export function getSuggestedPlanId(dayOfWeek = new Date().getDay()): string {
-  return PLAN_BY_WEEKDAY[dayOfWeek] ?? 'plan-segunda';
+  return PLAN_BY_WEEKDAY[dayOfWeek] ?? 'plan-full-body-a';
 }
 
 type ExerciseInput = {
@@ -25,6 +36,9 @@ type ExerciseInput = {
   reps: number;
   minReps?: number;
   restSeconds?: number;
+  rir: string;
+  supersetGroup?: string;
+  guidance?: string;
 };
 
 function exercise({
@@ -34,14 +48,23 @@ function exercise({
   reps,
   minReps,
   restSeconds = 90,
+  rir,
+  supersetGroup,
+  guidance,
 }: ExerciseInput): Exercise {
+  const repetitionTarget = minReps === undefined ? `${reps}` : `${minReps}–${reps}`;
+  const notes = [`Meta: ${repetitionTarget} repetições`, `RIR ${rir}`, guidance]
+    .filter(Boolean)
+    .join(' · ');
+
   return {
     id,
     name,
     targetSets: sets,
     targetReps: reps,
     restSeconds,
-    ...(minReps === undefined ? {} : { notes: `Meta: ${minReps}–${reps} repetições` }),
+    notes,
+    ...(supersetGroup ? { supersetGroup } : {}),
   };
 }
 
@@ -56,56 +79,38 @@ export function createWeeklyWorkoutPlans(now = new Date().toISOString()): Workou
   });
 
   return [
-    plan('plan-segunda', 'Segunda-feira', 'Peito, ombros e tríceps', [
-      exercise({ id: 'segunda-supino-inclinado-halteres', name: 'Supino inclinado com halteres', sets: 3, minReps: 8, reps: 12, restSeconds: 120 }),
-      exercise({ id: 'segunda-supino-reto', name: 'Supino reto no Smith ou barra', sets: 3, minReps: 6, reps: 10 }),
-      exercise({ id: 'segunda-supino-declinado', name: 'Supino declinado na máquina', sets: 4, minReps: 12, reps: 15 }),
-      exercise({ id: 'segunda-fly-peck-deck', name: 'Fly peck deck', sets: 2, minReps: 15, reps: 20 }),
-      exercise({ id: 'segunda-elevacao-lateral', name: 'Elevação lateral', sets: 4, reps: 12 }),
-      exercise({ id: 'segunda-triceps-testa', name: 'Tríceps testa', sets: 4, reps: 12 }),
+    plan('plan-full-body-a', 'Full Body A', 'Tensão mecânica · 22 séries', [
+      exercise({ id: 'terca-hack', name: 'Hack squat ou agachamento Smith', sets: 4, minReps: 5, reps: 8, restSeconds: 180, rir: '1–2' }),
+      exercise({ id: 'segunda-supino-inclinado-halteres', name: 'Supino inclinado com halteres', sets: 3, minReps: 6, reps: 10, restSeconds: 150, rir: '1–2' }),
+      exercise({ id: 'quarta-remada-maquina', name: 'Remada máquina', sets: 3, minReps: 6, reps: 10, restSeconds: 150, rir: '1–2' }),
+      exercise({ id: 'sexta-stiff', name: 'Stiff / terra romeno', sets: 3, minReps: 6, reps: 10, restSeconds: 150, rir: '2' }),
+      exercise({ id: 'segunda-elevacao-lateral', name: 'Elevação lateral', sets: 2, minReps: 12, reps: 20, restSeconds: 75, rir: '1' }),
+      exercise({ id: 'quarta-rosca-direta-halter', name: 'Rosca direta com halteres', sets: 2, minReps: 8, reps: 12, restSeconds: 75, rir: '1', supersetGroup: 'A' }),
+      exercise({ id: 'sabado-frances-polia', name: 'Tríceps francês na polia', sets: 2, minReps: 10, reps: 15, restSeconds: 75, rir: '1', supersetGroup: 'A' }),
+      exercise({ id: 'terca-panturrilha', name: 'Panturrilha em pé', sets: 3, minReps: 10, reps: 15, restSeconds: 75, rir: '1' }),
     ]),
-    plan('plan-terca', 'Terça-feira', 'Quadríceps e panturrilha', [
-      exercise({ id: 'terca-agachamento', name: 'Agachamento livre ou Smith', sets: 4, minReps: 8, reps: 10 }),
-      exercise({ id: 'terca-leg-press', name: 'Leg press', sets: 3, minReps: 8, reps: 10 }),
-      exercise({ id: 'terca-hack', name: 'Hack', sets: 3, minReps: 10, reps: 12 }),
-      exercise({ id: 'terca-bulgaro', name: 'Búlgaro', sets: 2, minReps: 6, reps: 10 }),
-      exercise({ id: 'terca-cadeira-extensora', name: 'Cadeira extensora', sets: 4, minReps: 8, reps: 10 }),
-      exercise({ id: 'terca-panturrilha', name: 'Panturrilha', sets: 3, reps: 10 }),
+    plan('plan-full-body-b', 'Full Body B', 'Volume e amplitude · 23 séries', [
+      exercise({ id: 'terca-leg-press', name: 'Leg press', sets: 3, minReps: 8, reps: 12, restSeconds: 150, rir: '1–2' }),
+      exercise({ id: 'quarta-puxada-alta', name: 'Puxada alta neutra ou aberta', sets: 3, minReps: 8, reps: 12, restSeconds: 120, rir: '1–2' }),
+      exercise({ id: 'segunda-supino-reto', name: 'Supino reto no Smith ou barra', sets: 3, minReps: 6, reps: 10, restSeconds: 150, rir: '1–2' }),
+      exercise({ id: 'sexta-cadeira-flexora', name: 'Cadeira flexora', sets: 3, minReps: 10, reps: 15, restSeconds: 105, rir: '1' }),
+      exercise({ id: 'quinta-desenvolvimento', name: 'Desenvolvimento militar no Smith', sets: 2, minReps: 6, reps: 10, restSeconds: 120, rir: '1–2' }),
+      exercise({ id: 'quinta-fly-reverso', name: 'Reverse peck deck', sets: 2, minReps: 12, reps: 20, restSeconds: 75, rir: '1' }),
+      exercise({ id: 'sabado-scott-unilateral', name: 'Scott unilateral com halter', sets: 2, minReps: 8, reps: 12, restSeconds: 75, rir: '1', supersetGroup: 'A' }),
+      exercise({ id: 'sabado-triceps-corda', name: 'Tríceps corda', sets: 2, minReps: 10, reps: 15, restSeconds: 75, rir: '1', supersetGroup: 'A' }),
+      exercise({ id: 'full-body-b-abdomen', name: 'Abdômen com carga', sets: 3, minReps: 10, reps: 20, restSeconds: 75, rir: '1–2' }),
     ]),
-    plan('plan-quarta', 'Quarta-feira', 'Costas e bíceps', [
-      exercise({ id: 'quarta-pulldown', name: 'Pulldown', sets: 2, minReps: 15, reps: 20 }),
-      exercise({ id: 'quarta-puxada-alta', name: 'Puxada alta', sets: 3, minReps: 12, reps: 15 }),
-      exercise({ id: 'quarta-remada-maquina', name: 'Remada máquina', sets: 4, minReps: 10, reps: 12 }),
-      exercise({ id: 'quarta-remada-unilateral', name: 'Remada unilateral', sets: 3, minReps: 8, reps: 10 }),
-      exercise({ id: 'quarta-serrote', name: 'Serrote', sets: 4, minReps: 8, reps: 10 }),
-      exercise({ id: 'quarta-rosca-direta-halter', name: 'Rosca direta com halteres', sets: 4, reps: 12 }),
-      exercise({ id: 'quarta-rosca-unilateral-polia', name: 'Rosca unilateral na polia', sets: 3, minReps: 8, reps: 10 }),
-    ]),
-    plan('plan-quinta', 'Quinta-feira', 'Ombros e peitoral', [
-      exercise({ id: 'quinta-elevacao-lateral-polia', name: 'Elevação lateral na polia', sets: 3, minReps: 12, reps: 15 }),
-      exercise({ id: 'quinta-desenvolvimento', name: 'Desenvolvimento militar ou com halteres', sets: 4, minReps: 8, reps: 10 }),
-      exercise({ id: 'quinta-fly-reverso', name: 'Fly peck deck reverso', sets: 3, minReps: 10, reps: 12 }),
-      exercise({ id: 'quinta-elevacao-frontal', name: 'Elevação frontal', sets: 3, minReps: 6, reps: 10 }),
-      exercise({ id: 'quinta-crossover-alto', name: 'Crossover alto', sets: 4, minReps: 12, reps: 15 }),
-      exercise({ id: 'quinta-crossover-medio', name: 'Crossover médio', sets: 4, minReps: 12, reps: 15 }),
-    ]),
-    plan('plan-sexta', 'Sexta-feira', 'Posterior, glúteos e panturrilha', [
-      exercise({ id: 'sexta-mesa-extensora', name: 'Mesa extensora', sets: 4, minReps: 10, reps: 12 }),
-      exercise({ id: 'sexta-stiff', name: 'Stiff', sets: 5, minReps: 10, reps: 15 }),
-      exercise({ id: 'sexta-cadeira-flexora', name: 'Cadeira flexora', sets: 4, reps: 10 }),
-      exercise({ id: 'sexta-elevacao-pelvica', name: 'Elevação pélvica', sets: 3, reps: 10 }),
-      exercise({ id: 'sexta-panturrilha', name: 'Panturrilha', sets: 3, reps: 10 }),
-    ]),
-    plan('plan-sabado', 'Sábado', 'Bíceps e tríceps', [
-      exercise({ id: 'sabado-rosca-direta-halter', name: 'Rosca direta com halteres', sets: 3, minReps: 10, reps: 12 }),
-      exercise({ id: 'sabado-martelo', name: 'Rosca martelo', sets: 3, minReps: 8, reps: 10 }),
-      exercise({ id: 'sabado-scott-unilateral', name: 'Scott unilateral com halter', sets: 4, minReps: 10, reps: 12 }),
-      exercise({ id: 'sabado-rosca-inclinada', name: 'Rosca inclinada', sets: 2, reps: 10 }),
-      exercise({ id: 'sabado-triceps-corda', name: 'Tríceps corda', sets: 3, minReps: 10, reps: 12 }),
-      exercise({ id: 'sabado-barra-w', name: 'Tríceps barra W', sets: 3, minReps: 10, reps: 12 }),
-      exercise({ id: 'sabado-frances-polia', name: 'Tríceps francês na polia', sets: 4, minReps: 10, reps: 12 }),
-      exercise({ id: 'sabado-unilateral-polia', name: 'Tríceps unilateral na polia', sets: 2, minReps: 8, reps: 10 }),
-      exercise({ id: 'sabado-triceps-pulley', name: 'Tríceps pulley', sets: 4, minReps: 12, reps: 15 }),
+    plan('plan-full-body-c', 'Full Body C', 'Densidade e unilateral · 24 séries', [
+      exercise({ id: 'terca-bulgaro', name: 'Agachamento búlgaro', sets: 3, minReps: 8, reps: 12, restSeconds: 150, rir: '1–2', guidance: 'por perna' }),
+      exercise({ id: 'segunda-supino-declinado', name: 'Supino declinado na máquina', sets: 3, minReps: 8, reps: 12, restSeconds: 120, rir: '1–2' }),
+      exercise({ id: 'quarta-serrote', name: 'Serrote / remada unilateral', sets: 3, minReps: 8, reps: 12, restSeconds: 120, rir: '1–2' }),
+      exercise({ id: 'sexta-cadeira-flexora', name: 'Flexora sentada ou deitada', sets: 2, minReps: 10, reps: 15, restSeconds: 90, rir: '1' }),
+      exercise({ id: 'terca-cadeira-extensora', name: 'Cadeira extensora', sets: 2, minReps: 12, reps: 15, restSeconds: 90, rir: '1' }),
+      exercise({ id: 'quarta-pulldown', name: 'Pullover / pulldown na polia', sets: 2, minReps: 12, reps: 15, restSeconds: 90, rir: '1' }),
+      exercise({ id: 'quinta-elevacao-lateral-polia', name: 'Elevação lateral na polia', sets: 2, minReps: 12, reps: 20, restSeconds: 75, rir: '1' }),
+      exercise({ id: 'sabado-martelo', name: 'Rosca martelo', sets: 2, minReps: 8, reps: 12, restSeconds: 75, rir: '1', supersetGroup: 'A' }),
+      exercise({ id: 'sabado-barra-w', name: 'Tríceps barra W', sets: 2, minReps: 8, reps: 12, restSeconds: 75, rir: '1', supersetGroup: 'A' }),
+      exercise({ id: 'sexta-panturrilha', name: 'Panturrilha', sets: 3, minReps: 12, reps: 20, restSeconds: 75, rir: '1' }),
     ]),
   ];
 }
@@ -114,9 +119,8 @@ export function installWeeklyWorkoutPlans(state: AppState, now = new Date().toIS
   if (state.starterPlanVersion === STARTER_PLAN_VERSION) return state;
 
   const weeklyPlans = createWeeklyWorkoutPlans(now);
-  const weeklyIds = new Set(weeklyPlans.map((plan) => plan.id));
   const preservedPlans = state.plans.filter(
-    (plan) => !LEGACY_SAMPLE_PLAN_IDS.has(plan.id) && !weeklyIds.has(plan.id),
+    (plan) => !LEGACY_SAMPLE_PLAN_IDS.has(plan.id) && !BUNDLED_PLAN_IDS.has(plan.id),
   );
   const unusedLegacyWorkout = Boolean(
     state.activeWorkout
