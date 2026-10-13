@@ -39,7 +39,9 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         navigateFallback: 'index.html',
-        importScripts: ['notification-sw.js'],
+        // A release-specific URL prevents an installed iPhone app from reusing
+        // the old notification handler through the HTTP imports cache.
+        importScripts: [`notification-sw.js?v=${process.env.npm_package_version ?? 'push-v1'}`],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,mp4}'],
         globIgnores: ['icons/icon-*.png'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
