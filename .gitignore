@@ -7,6 +7,10 @@ dist/
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
+.wrangler/
+push-service/.secrets/
 
 # Ferramentas e sistema
 .DS_Store

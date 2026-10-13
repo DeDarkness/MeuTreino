@@ -27,6 +27,7 @@ import {
   type WorkoutPlanInput,
 } from '../lib/workout';
 import type { AppState, Preferences, WorkoutHistory, WorkoutPlan } from '../types';
+import { syncPushRest } from '../lib/pushNotifications';
 
 export interface WorkoutStoreActions {
   savePlan(input: WorkoutPlanInput): Promise<WorkoutPlan>;
@@ -82,6 +83,7 @@ export function useWorkoutStore(): WorkoutStore {
         if (cancelled) return;
         stateRef.current = loaded;
         setState(loaded);
+        void syncPushRest(loaded.activeWorkout, loaded.preferences.soundEnabled).catch(() => undefined);
         setError(null);
       })
       .catch((cause: unknown) => {
@@ -130,6 +132,8 @@ export function useWorkoutStore(): WorkoutStore {
       throw cause;
     }
     stateRef.current = changed.state;
+    // Begin scheduling/cancellation immediately after the tap, before waiting for disk.
+    void syncPushRest(changed.state.activeWorkout, changed.state.preferences.soundEnabled).catch(() => undefined);
     if (mountedRef.current) {
       setState(changed.state);
       setError(null);
@@ -226,6 +230,7 @@ export function useWorkoutStore(): WorkoutStore {
         const imported = await importState(source);
         importedState = imported;
         stateRef.current = imported;
+        void syncPushRest(imported.activeWorkout, imported.preferences.soundEnabled).catch(() => undefined);
         if (mountedRef.current) {
           setState(imported);
           setError(null);
@@ -259,6 +264,7 @@ export function useWorkoutStore(): WorkoutStore {
       activeWorkout: null,
     };
     stateRef.current = empty;
+    void syncPushRest(null, empty.preferences.soundEnabled).catch(() => undefined);
     if (mountedRef.current) {
       setState(empty);
       setError(null);

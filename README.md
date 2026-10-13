@@ -1,6 +1,6 @@
 # MeuTreino
 
-MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de Início do iPhone. Não usa Expo, App Store, Apple Developer, conta, Supabase ou servidor. Treinos, cargas e histórico ficam no IndexedDB do próprio aparelho.
+MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de Início do iPhone. Não usa Expo, App Store, Apple Developer, login ou Supabase. Treinos, cargas e histórico ficam no IndexedDB do próprio aparelho. O serviço opcional na Cloudflare envia somente avisos de descanso em segundo plano.
 
 ## Recursos
 
@@ -16,7 +16,8 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 - Descanso não bloqueante: navegue pelo app enquanto o contador continua em um painel flutuante.
 - Edição de carga e repetições de qualquer série durante a sessão em andamento.
 - Alerta sonoro reforçado, com teste nos Ajustes.
-- Notificação de fim do descanso, com permissão solicitada diretamente pelo iPhone no app instalado.
+- Web Push de fim do descanso, agendado pelo serviço Cloudflare e recebido mesmo com a tela bloqueada, após ativação no app instalado.
+- Confirmação de agendamento, reagendamento com `+15 s`, cancelamento e teste independente de 10 segundos.
 - Sessão ativa restaurada após fechar ou recarregar o app.
 - Painel de evolução com gráfico por exercício, carga, repetições, volume e força estimada.
 - Detecção de recordes pessoais durante o treino e no histórico.
@@ -46,7 +47,29 @@ Depois que o site estiver publicado:
 
 O ícone MeuTreino aparecerá na Tela de Início e abrirá em janela própria. O primeiro acesso precisa de internet para baixar e guardar os arquivos; depois o app abre offline.
 
-> A tela pode apagar normalmente durante o descanso. O alerta sonoro funciona com o app ativo e, após autorização, o MeuTreino também tenta mostrar uma notificação do iPhone. Como o cronômetro é totalmente local e não há servidor de Web Push, o iOS pode suspender o Web App e atrasar o aviso até o app voltar a executar.
+> A tela pode apagar normalmente durante o descanso. Ative os avisos em segundo plano nos Ajustes do MeuTreino e confira a mensagem de agendamento antes de bloquear a tela. O Web Push exige internet e pode sofrer atrasos; o som segue as configurações do iPhone. Sem esse serviço, o alerta local depende da execução do Web App. Treinar, registrar séries e consultar histórico continua funcionando offline.
+
+## Serviço gratuito de notificações
+
+O código está em `push-service/`. Ele usa Workers Free e Durable Objects com SQLite. Um aparelho tem somente um descanso e um teste pendentes, com credencial própria e revisões para rejeitar pedidos antigos. Avisos expiram após 60 segundos e inscrições encerradas são desativadas. Nenhum treino, carga ou histórico completo é enviado.
+
+Depois de criar sua conta Cloudflare, execute na pasta `push-service`:
+
+```bash
+npm ci
+npm run typecheck
+npm test
+npm run setup-keys
+npm run login
+npm run deploy
+npm run upload-keys
+```
+
+O login abre a autorização oficial no navegador. As chaves são geradas uma vez em `.secrets/vapid.json`, ignorado pelo Git, e enviadas como segredos para a Cloudflare. Não publique nem substitua essas chaves em atualizações normais.
+
+Após publicar, configure o endereço público `workers.dev` em `src/lib/pushConfig.ts` ou na variável de build `VITE_PUSH_SERVICE_URL`, recompile o PWA e publique pelo GitHub Pages. O endereço é público; a chave privada nunca deve entrar no frontend. O serviço não exige domínio próprio ou plano pago e permanece sujeito aos limites do plano Free.
+
+No iPhone: abra pelo ícone da Tela de Início → Ajustes → Ativar avisos em segundo plano → aceite a permissão → Testar com a tela bloqueada. O teste chega após 10 segundos sem substituir o descanso em andamento. As inscrições são específicas do aparelho e não entram no backup JSON do treino.
 
 ## Rodar no computador durante o desenvolvimento
 

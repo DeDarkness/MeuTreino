@@ -1,9 +1,11 @@
 import { BellRing, Check, Database, Download, Info, LockKeyhole, Smartphone, Trash2, Upload, Volume2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
+import { PushNotificationSettings } from '../components/PushNotificationSettings';
+import type { PushStatus } from '../lib/pushNotifications';
 import type { RestNotificationPermission } from '../lib/notifications';
 import { playRestAlert, primeRestAlertAudio } from '../lib/restAlert';
-import type { Preferences } from '../types';
+import type { ActiveWorkout, Preferences } from '../types';
 
 type SettingsScreenProps = {
   preferences: Preferences;
@@ -16,6 +18,9 @@ type SettingsScreenProps = {
   onRequestPersistence: () => Promise<boolean>;
   notificationPermission: RestNotificationPermission;
   onRequestNotifications: () => Promise<RestNotificationPermission>;
+  pushStatus: PushStatus;
+  activeWorkout: ActiveWorkout | null;
+  onNotificationPermissionChange: () => void;
 };
 
 export function SettingsScreen({
@@ -29,6 +34,9 @@ export function SettingsScreen({
   onRequestPersistence,
   notificationPermission,
   onRequestNotifications,
+  pushStatus,
+  activeWorkout,
+  onNotificationPermissionChange,
 }: SettingsScreenProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -56,6 +64,7 @@ export function SettingsScreen({
       {message ? <div className="toast-message" role="status">{message}<button type="button" onClick={() => setMessage(null)}>×</button></div> : null}
 
       <SettingsGroup title="Alertas do descanso" icon={<BellRing />}>
+        <PushNotificationSettings status={pushStatus} workout={activeWorkout} soundEnabled={preferences.soundEnabled} onPermissionChange={onNotificationPermissionChange} />
         {notificationPermission === 'granted' ? (
           <div className="installed-state"><Check /><div><strong>Notificações autorizadas</strong><p>O iPhone pode mostrar o aviso quando o descanso terminar.</p></div></div>
         ) : notificationPermission === 'default' ? (
@@ -94,7 +103,6 @@ export function SettingsScreen({
           playRestAlert(preferences.restAlertSound);
           setMessage('Reproduzindo o aviso de descanso.');
         }}><Volume2 /> <span><strong>Testar som do descanso</strong><small>Reproduz agora o alerta longo selecionado.</small></span></button>
-        <p className="settings-note"><Info size={16} /> A tela poderá apagar normalmente. Como o cronômetro é local, o iOS pode atrasar o aviso caso suspenda o Web App com a tela bloqueada.</p>
       </SettingsGroup>
 
       <SettingsGroup title="Padrões do treino" icon={<Smartphone />}>
@@ -119,7 +127,7 @@ export function SettingsScreen({
       </SettingsGroup>
 
       <SettingsGroup title="Dados neste iPhone" icon={<Database />}>
-        <div className="privacy-box"><LockKeyhole /><div><strong>Local e privado</strong><p>Treinos e histórico ficam somente neste aparelho. Nenhum login ou servidor é usado.</p></div></div>
+        <div className="privacy-box"><LockKeyhole /><div><strong>Treinos neste aparelho</strong><p>Treinos e histórico ficam somente aqui. Se você ativar os avisos em segundo plano, a Cloudflare recebe apenas a inscrição de notificações e os avisos agendados.</p></div></div>
         <button className="setting-action" type="button" onClick={() => run(onExport, 'Backup exportado.')}><Download /> <span><strong>Exportar backup</strong><small>Salve uma cópia em JSON no app Arquivos.</small></span></button>
         <button className="setting-action" type="button" onClick={() => fileInputRef.current?.click()}><Upload /> <span><strong>Importar backup</strong><small>Substitui os dados atuais por um backup válido.</small></span></button>
         <input
@@ -163,7 +171,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 6.0 · PWA pessoal e offline</span></footer>
+      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 6.1 · PWA pessoal e offline</span></footer>
     </section>
   );
 }

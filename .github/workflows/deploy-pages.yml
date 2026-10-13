@@ -40,6 +40,15 @@ jobs:
       - name: Testar regras de treino
         run: npm test
 
+      - name: Instalar dependências do serviço de avisos
+        run: npm ci --prefix push-service
+
+      - name: Validar serviço de avisos
+        run: npm run typecheck --prefix push-service
+
+      - name: Testar agendamento e envio dos avisos
+        run: npm test --prefix push-service
+
       - name: Compilar PWA
         run: npm run build
 

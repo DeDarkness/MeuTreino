@@ -436,6 +436,14 @@ svg {
   gap: 7px;
 }
 
+.push-settings { padding: 6px 0 14px; border-bottom: 1px solid var(--border); }
+.push-settings__status { display: flex; align-items: flex-start; gap: 10px; padding: 14px; color: var(--accent); }
+.push-settings__status strong { display: block; color: var(--text); font-size: 0.88rem; }
+.push-settings__status p { margin: 6px 0 0; color: var(--muted-strong); font-size: 0.78rem; line-height: 1.5; }
+.push-settings__status.is-error { color: var(--danger); }
+.push-settings__message { margin: 10px 14px; font-size: 0.83rem; line-height: 1.5; color: var(--text); }
+.active-workout__push-status { display: flex; align-items: center; gap: 7px; font-size: 0.76rem; line-height: 1.45; color: var(--muted-strong); }
+
 .day-picker__button {
   position: relative;
   display: flex;

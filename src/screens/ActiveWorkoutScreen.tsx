@@ -58,6 +58,7 @@ export interface ActiveWorkoutScreenProps {
   onClose: () => void;
   notificationPermission: RestNotificationPermission;
   onRequestNotifications: () => Promise<RestNotificationPermission>;
+  pushRestMessage: string | null;
 }
 
 export function ActiveWorkoutScreen({
@@ -79,6 +80,7 @@ export function ActiveWorkoutScreen({
   onClose,
   notificationPermission,
   onRequestNotifications,
+  pushRestMessage,
 }: ActiveWorkoutScreenProps) {
   const now = useCurrentTime();
   const currentCardRef = useRef<HTMLElement | null>(null);
@@ -179,6 +181,7 @@ export function ActiveWorkoutScreen({
           <div className="active-workout__progress-fill" style={{ width: `${progress * 100}%` }} />
         </div>
         <NotificationStatus permission={notificationPermission} onRequest={onRequestNotifications} />
+        {pushRestMessage ? <p className="active-workout__push-status" role="status"><BellRing size={15} />{pushRestMessage}</p> : null}
       </section>
 
       {isResting ? (
@@ -548,7 +551,7 @@ function NotificationStatus({
   onRequest: () => Promise<RestNotificationPermission>;
 }) {
   if (permission === 'granted') {
-    return <div className="active-workout__notification-status is-active"><BellRing aria-hidden="true" size={15} /> Avisos do iPhone ativados</div>;
+    return <div className="active-workout__notification-status is-active"><BellRing aria-hidden="true" size={15} /> Permissão de notificações concedida</div>;
   }
   if (permission === 'default') {
     return (

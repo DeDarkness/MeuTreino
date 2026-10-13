@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import { showRestFinishedNotification } from '../lib/notifications';
 import { playRestAlert } from '../lib/restAlert';
+import { isPushRestScheduled } from '../lib/pushNotifications';
 import type { ActiveWorkout, Preferences } from '../types';
 
 export function useRestAlert(
@@ -27,13 +28,18 @@ export function useRestAlert(
 
     const finishRest = () => {
       if (Date.now() < restEndMs || alertedRestRef.current === restEndsAt) return;
+      const remoteScheduled = isPushRestScheduled(workout.id, restEndsAt);
+      // If iOS keeps this hidden tab alive briefly, don't cancel its remote alarm
+      // before the service delivers it. Reconcile the session when it is visible.
+      if (remoteScheduled && document.visibilityState !== 'visible') return;
       alertedRestRef.current = restEndsAt;
 
-      if (preferences.soundEnabled) playRestAlert(preferences.restAlertSound);
-      if (preferences.vibrationEnabled && 'vibrate' in navigator) {
+      const alertNow = document.visibilityState === 'visible' && Date.now() - restEndMs < 3000;
+      if (preferences.soundEnabled && alertNow) playRestAlert(preferences.restAlertSound);
+      if (preferences.vibrationEnabled && alertNow && 'vibrate' in navigator) {
         navigator.vibrate([260, 120, 260, 120, 420]);
       }
-      void showRestFinishedNotification(exercise?.exerciseName ?? 'próxima série', set?.setNumber ?? 1);
+      if (!remoteScheduled) void showRestFinishedNotification(exercise?.exerciseName ?? 'próxima série', set?.setNumber ?? 1);
       void onRestFinished().catch(() => undefined);
     };
 

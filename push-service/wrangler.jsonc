@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "meutreino-push",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGINS": "https://dedarkness.github.io,http://localhost:5173,http://localhost:4173",
+    "APP_URL": "https://dedarkness.github.io/MeuTreino/",
+    "VAPID_SUBJECT": "https://dedarkness.github.io/MeuTreino/"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "DEVICES", "class_name": "PushDevice" }]
+  },
+  "exports": {
+    "PushDevice": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "ratelimits": [{
+    "name": "API_LIMITER",
+    "namespace_id": "103131",
+    "simple": { "limit": 60, "period": 60 }
+  }],
+  "observability": { "enabled": false }
+}

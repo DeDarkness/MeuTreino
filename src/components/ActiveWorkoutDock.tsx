@@ -8,9 +8,10 @@ type ActiveWorkoutDockProps = {
   onOpen: () => void;
   onAddRest: (seconds: number) => void;
   onSkipRest: () => void;
+  pushRestMessage: string | null;
 };
 
-export function ActiveWorkoutDock({ workout, onOpen, onAddRest, onSkipRest }: ActiveWorkoutDockProps) {
+export function ActiveWorkoutDock({ workout, onOpen, onAddRest, onSkipRest, pushRestMessage }: ActiveWorkoutDockProps) {
   const now = useCurrentTime();
   const restEndMs = workout.restEndsAt ? Date.parse(workout.restEndsAt) : null;
   const isResting = restEndMs !== null && Number.isFinite(restEndMs) && restEndMs > now;
@@ -28,7 +29,7 @@ export function ActiveWorkoutDock({ workout, onOpen, onAddRest, onSkipRest }: Ac
         <span className="workout-dock__icon">{isResting ? <Timer /> : <Dumbbell />}</span>
         <span className="workout-dock__copy">
           <strong>{isResting ? 'Descanso rolando' : workout.planName}</strong>
-          <small>{exercise ? `${exercise.exerciseName} · série ${set?.setNumber ?? 1}` : `${completed}/${total} séries`}</small>
+          <small>{isResting && pushRestMessage ? pushRestMessage : exercise ? `${exercise.exerciseName} · série ${set?.setNumber ?? 1}` : `${completed}/${total} séries`}</small>
         </span>
         {isResting ? <time>{formatRestClock(remainingSeconds)}</time> : <span className="workout-dock__progress">{completed}/{total}</span>}
       </button>

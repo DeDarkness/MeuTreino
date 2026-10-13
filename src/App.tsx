@@ -9,6 +9,7 @@ import { WorkoutSummaryDialog } from './components/WorkoutSummaryDialog';
 import { useWallpaper } from './hooks/useWallpaper';
 import { useRestAlert } from './hooks/useRestAlert';
 import { useWorkoutStore } from './hooks/useWorkoutStore';
+import { usePushNotifications } from './hooks/usePushNotifications';
 import { getRestNotificationPermission, requestRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
@@ -22,6 +23,7 @@ type NavigatorWithStandalone = Navigator & { standalone?: boolean };
 
 export default function App() {
   const store = useWorkoutStore();
+  const pushStatus = usePushNotifications();
   const wallpaper = useWallpaper();
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [showActiveWorkout, setShowActiveWorkout] = useState(false);
@@ -235,6 +237,7 @@ export default function App() {
           onClose={() => setShowActiveWorkout(false)}
           notificationPermission={notificationPermission}
           onRequestNotifications={requestNotifications}
+          pushRestMessage={pushStatus.enabled && activeWorkout.restEndsAt ? pushStatus.message : null}
         />
         <BottomNav
           activeTab={null}
@@ -320,6 +323,9 @@ export default function App() {
             onRequestPersistence={requestPersistence}
             notificationPermission={notificationPermission}
             onRequestNotifications={requestNotifications}
+            pushStatus={pushStatus}
+            activeWorkout={activeWorkout}
+            onNotificationPermissionChange={() => setNotificationPermission(getRestNotificationPermission())}
           />
         ) : null}
       </main>
@@ -330,6 +336,7 @@ export default function App() {
           onOpen={() => setShowActiveWorkout(true)}
           onAddRest={(seconds) => runAction(store.addRestSeconds(seconds))}
           onSkipRest={() => runAction(store.skipRest())}
+          pushRestMessage={pushStatus.enabled && activeWorkout.restEndsAt ? pushStatus.message : null}
         />
       ) : null}
       <BottomNav activeTab={activeTab} onChange={setActiveTab} />
