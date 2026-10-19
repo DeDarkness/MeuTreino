@@ -4,11 +4,20 @@ export type IsoDateString = string;
 export type WeightUnit = 'kg' | 'lb';
 
 /** An exercise as configured inside a reusable workout plan. */
+export type MuscleGroup = 'quadriceps' | 'posterior' | 'gluteos' | 'peito' | 'costas' | 'ombros' | 'deltoide_posterior' | 'biceps' | 'triceps' | 'panturrilhas' | 'core';
+
 export interface Exercise {
   id: string;
   name: string;
   targetSets: number;
   targetReps: number;
+  /** Lower bound for the prescription (upper bound remains targetReps). */
+  minReps?: number;
+  /** Prescribed repetitions in reserve. This is not the actual performed RIR. */
+  targetRirMin?: number;
+  targetRirMax?: number;
+  /** Dominant direct muscle target for volume accounting; compound overlaps excluded. */
+  muscleGroup?: MuscleGroup;
   restSeconds: number;
   notes?: string;
   /** Exercises sharing the same label alternate set-by-set during the workout. */
@@ -66,6 +75,11 @@ export interface ActiveWorkoutSet {
 export interface ActiveWorkoutExercise {
   exerciseId: string;
   exerciseName: string;
+  /** Structured training target copied at session start. */
+  minReps?: number;
+  targetRirMin?: number;
+  targetRirMax?: number;
+  muscleGroup?: MuscleGroup;
   restSeconds: number;
   notes?: string;
   supersetGroup?: string;
@@ -104,6 +118,8 @@ export interface AppState {
   schemaVersion: typeof APP_STATE_SCHEMA_VERSION;
   /** Marks one-time installation of the bundled weekly plans on existing devices. */
   starterPlanVersion?: number;
+  /** One-time Elite update; archived plans and history remain on device. */
+  eliteProtocolVersion?: number;
   plans: WorkoutPlan[];
   history: WorkoutHistory[];
   activeWorkout: ActiveWorkout | null;

@@ -12,6 +12,7 @@ import { useWorkoutStore } from './hooks/useWorkoutStore';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { getRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
 import { enablePushNotifications } from './lib/pushNotifications';
+import type { TrainingMode } from './lib/trainingModes';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -107,7 +108,7 @@ export default function App() {
     );
   }
 
-  const openWorkout = async (plan: WorkoutPlan) => {
+  const openWorkout = async (plan: WorkoutPlan, mode: TrainingMode = 'complete') => {
     if (isStandalone && notificationPermission === 'default') {
       try { await enablePushNotifications(); } catch { /* Notification failures must not prevent training. */ }
       setNotificationPermission(getRestNotificationPermission());
@@ -117,7 +118,7 @@ export default function App() {
       setShowActiveWorkout(true);
       return;
     }
-    await store.startWorkout(plan.id);
+    await store.startWorkout(plan.id, mode);
     setShowActiveWorkout(true);
   };
 
@@ -263,7 +264,7 @@ export default function App() {
             history={state.history}
             activeWorkout={activeWorkout}
             showInstallPrompt={showIosInstallPrompt}
-            onStart={(plan) => runAction(openWorkout(plan))}
+            onStart={(plan, mode) => runAction(openWorkout(plan, mode))}
             onContinue={() => setShowActiveWorkout(true)}
             onGoPlans={() => setActiveTab('plans')}
             onGoHistory={() => setActiveTab('history')}
@@ -275,7 +276,7 @@ export default function App() {
             plans={state.plans}
             activeWorkout={activeWorkout}
             defaultRestSeconds={state.preferences.defaultRestSeconds}
-            onStart={(plan) => runAction(openWorkout(plan))}
+            onStart={(plan, mode) => runAction(openWorkout(plan, mode))}
             onSave={(plan) => runAction(store.savePlan(plan))}
             onDelete={(id) => runAction(store.deletePlan(id))}
             onDuplicate={(id) => runAction(store.duplicatePlan(id))}
@@ -309,6 +310,7 @@ export default function App() {
             storagePersistent={storagePersistent}
             onPreferencesChange={(patch) => runAction(store.updatePreferences(patch))}
             onExport={exportBackup}
+            onInstallPreSurgicalProtocol={store.installPreSurgicalProtocol}
             onImport={async (file) => { await store.importData(await file.text()); }}
             onClear={async () => {
               await Promise.all([store.clearData(), wallpaper.remove()]);

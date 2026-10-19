@@ -6,6 +6,7 @@ import type {
   WorkoutHistory,
   WorkoutPlan,
 } from '../types';
+import { getModeExercises, type TrainingMode } from './trainingModes';
 
 export type ExerciseInput = Omit<Exercise, 'id'> & { id?: string };
 
@@ -106,14 +107,17 @@ export function startWorkoutFromPlan(
   state: AppState,
   planId: string,
   now = new Date().toISOString(),
+  mode: TrainingMode = 'complete',
 ): { state: AppState; workout: ActiveWorkout } {
+  if (state.activeWorkout) throw new Error('Já existe uma sessão em andamento.');
   const plan = state.plans.find((item) => item.id === planId);
   if (!plan) throw new Error('Treino não encontrado.');
+  const sessionExercises = getModeExercises(plan, mode);
 
   const workout: ActiveWorkout = {
     id: createWorkoutId('workout'),
     planId: plan.id,
-    planName: plan.name,
+    planName: mode === 'express' ? `${plan.name} · Express` : plan.name,
     startedAt: now,
     updatedAt: now,
     currentExerciseIndex: 0,
@@ -121,11 +125,15 @@ export function startWorkoutFromPlan(
     restStartedAt: null,
     restEndsAt: null,
     restDurationSeconds: null,
-    exercises: plan.exercises.map((exercise) => {
+    exercises: sessionExercises.map((exercise) => {
       const previousSets = lastRecordedSets(state, exercise);
       return {
         exerciseId: exercise.id,
         exerciseName: exercise.name,
+        ...(exercise.minReps !== undefined ? { minReps: exercise.minReps } : {}),
+        ...(exercise.targetRirMin !== undefined ? { targetRirMin: exercise.targetRirMin } : {}),
+        ...(exercise.targetRirMax !== undefined ? { targetRirMax: exercise.targetRirMax } : {}),
+        ...(exercise.muscleGroup !== undefined ? { muscleGroup: exercise.muscleGroup } : {}),
         restSeconds: exercise.restSeconds,
         ...(exercise.notes ? { notes: exercise.notes } : {}),
         ...(exercise.supersetGroup ? { supersetGroup: exercise.supersetGroup } : {}),

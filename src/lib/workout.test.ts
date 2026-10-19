@@ -40,7 +40,7 @@ describe('sessão de treino', () => {
 
     const { workout } = startWorkoutFromPlan(withHistory, 'plan-full-body-a', startedAt);
     expect(workout.exercises[0].sets[0]).toMatchObject({ reps: 7, weight: 82.5 });
-    expect(workout.exercises[0].sets[1]).toMatchObject({ reps: 8, weight: null });
+    expect(workout.exercises[0].sets[1]).toMatchObject({ reps: seed.plans[0].exercises[0].targetReps, weight: null });
   });
 
   it('conclui a série, avança o cursor e usa um fim de descanso absoluto', () => {

@@ -35,6 +35,13 @@ describe('evolução do treino', () => {
     expect(suggestion).toMatchObject({ currentWeight: 80, suggestedWeight: 82.5, targetReps: 10 });
   });
 
+  it('usa a meta editada em vez de observações desatualizadas para a progressão', () => {
+    expect(getLoadSuggestion(history, {
+      id: 'supino', name: 'Supino reto', targetSets: 3, targetReps: 12,
+      notes: 'Meta: 6–10 repetições',
+    }, 'kg')).toBeNull();
+  });
+
   it('identifica um novo recorde de carga antes de concluir a série', () => {
     expect(getPotentialRecordLabels(history, {
       exerciseId: 'supino', exerciseName: 'Supino reto',

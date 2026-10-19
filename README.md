@@ -5,7 +5,7 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 ## Recursos
 
 - Criar, editar, duplicar e excluir fichas.
-- Full Body avançado 3× por semana já cadastrado: A na segunda, B na quarta e C na sexta, com 27 exercícios e 69 séries.
+- Full Body pré-cirurgia 3× por semana: A na segunda, B na quarta e C na sexta, com 28 entradas de exercícios e 60 séries semanais (20/19/21). Em instalações existentes, a atualização aplica o protocolo uma única vez, arquivando as fichas A/B/C anteriores com conteúdo diferente e preservando o histórico. Uma sessão em andamento adia a troca até ser finalizada. Reaplicação manual disponível em Ajustes → Protocolos de treino.
 - Metas de RIR, intervalos de repetição e descansos específicos em cada exercício.
 - Seletor visual do dia de treino na tela inicial.
 - Wallpaper personalizado com foto, GIF ou vídeo em loop salvo somente no aparelho.

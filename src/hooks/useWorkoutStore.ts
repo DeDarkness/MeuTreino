@@ -28,12 +28,14 @@ import {
 } from '../lib/workout';
 import type { AppState, Preferences, WorkoutHistory, WorkoutPlan } from '../types';
 import { syncPushRest } from '../lib/pushNotifications';
+import { applyPreSurgicalProtocol, upgradeEliteProtocol } from '../lib/starterPlans';
+import type { TrainingMode } from '../lib/trainingModes';
 
 export interface WorkoutStoreActions {
   savePlan(input: WorkoutPlanInput): Promise<WorkoutPlan>;
   deletePlan(planId: string): Promise<void>;
   duplicatePlan(planId: string): Promise<WorkoutPlan>;
-  startWorkout(planId: string): Promise<void>;
+  startWorkout(planId: string, mode?: TrainingMode): Promise<void>;
   updateSet(exerciseId: string, setId: string, patch: ActiveSetPatch): Promise<void>;
   selectSet(exerciseId: string, setId: string): Promise<void>;
   completeSet(exerciseId: string, setId: string): Promise<void>;
@@ -51,6 +53,7 @@ export interface WorkoutStoreActions {
   importData(source: string | unknown): Promise<AppState>;
   exportData(): Promise<string>;
   clearData(): Promise<void>;
+  installPreSurgicalProtocol(): Promise<void>;
 }
 
 export interface WorkoutStore extends WorkoutStoreActions {
@@ -163,8 +166,8 @@ export function useWorkoutStore(): WorkoutStore {
       return { state: changed.state, result: changed.plan };
     }), [commit]);
 
-  const startWorkout = useCallback((planId: string) => commitState((current) =>
-    startWorkoutFromPlan(current, planId).state), [commitState]);
+  const startWorkout = useCallback((planId: string, mode: TrainingMode = 'complete') => commitState((current) =>
+    startWorkoutFromPlan(current, planId, new Date().toISOString(), mode).state), [commitState]);
 
   const updateSet = useCallback((exerciseId: string, setId: string, patch: ActiveSetPatch) =>
     commitState((current) => updateActiveSet(current, exerciseId, setId, patch)), [commitState]);
@@ -199,10 +202,10 @@ export function useWorkoutStore(): WorkoutStore {
   const finishWorkout = useCallback(() =>
     commit((current) => {
       const changed = finishActiveWorkout(current);
-      return { state: changed.state, result: changed.history };
+      return { state: upgradeEliteProtocol(changed.state), result: changed.history };
     }), [commit]);
 
-  const abandonWorkout = useCallback(() => commitState((current) => ({
+  const abandonWorkout = useCallback(() => commitState((current) => upgradeEliteProtocol({
     ...current,
     activeWorkout: null,
     updatedAt: new Date().toISOString(),
@@ -254,6 +257,9 @@ export function useWorkoutStore(): WorkoutStore {
     return exportState();
   }, []);
 
+  const installPreSurgicalProtocol = useCallback(() =>
+    commitState((current) => applyPreSurgicalProtocol(current)), [commitState]);
+
   const clearData = useCallback(async (): Promise<void> => {
     if (importingRef.current) throw new Error('Aguarde a importação do backup terminar.');
     const seeded = createSeedState();
@@ -296,10 +302,12 @@ export function useWorkoutStore(): WorkoutStore {
     importData,
     exportData,
     clearData,
+    installPreSurgicalProtocol,
   }), [
     abandonWorkout,
     addRestSeconds,
     clearData,
+    installPreSurgicalProtocol,
     completeSet,
     deferExercise,
     deleteHistory,

@@ -16,14 +16,15 @@ import {
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
 
 import { useNumericDraft } from '../hooks/useNumericDraft';
-import type { ActiveWorkout, Exercise, WorkoutPlan } from '../types';
+import type { ActiveWorkout, Exercise, WorkoutPlan, MuscleGroup } from '../types';
+import { canUseExpress, getModeExercises, MUSCLE_LABELS, plannedSets, weeklyMuscleVolumes, type TrainingMode } from '../lib/trainingModes';
 import './plans-screen.css';
 
 export interface PlansScreenProps {
   plans: WorkoutPlan[];
   activeWorkout: ActiveWorkout | null;
   defaultRestSeconds: number;
-  onStart: (plan: WorkoutPlan) => void;
+  onStart: (plan: WorkoutPlan, mode?: TrainingMode) => void;
   onSave: (plan: WorkoutPlan) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -80,6 +81,7 @@ export function PlansScreen({
   onDuplicate,
 }: PlansScreenProps) {
   const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null);
+  const [mode, setMode] = useState<TrainingMode>('complete');
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [editorDirty, setEditorDirty] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<WorkoutPlan | null>(null);
@@ -104,6 +106,8 @@ export function PlansScreen({
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [closeEditor, deleteTarget, editor, selectedPlan]);
 
+  const volumePlans = useMemo(() => plans.filter((plan) => ['plan-full-body-a','plan-full-body-b','plan-full-body-c'].includes(plan.id)), [plans]);
+  const weeklyVolume = useMemo(() => weeklyMuscleVolumes(volumePlans), [volumePlans]);
   const exerciseCount = useMemo(
     () => plans.reduce((total, plan) => total + plan.exercises.length, 0),
     [plans],
@@ -142,6 +146,20 @@ export function PlansScreen({
         </div>
       </header>
 
+      {weeklyVolume.length > 0 ? (
+        <section className="elite-volume-card" aria-label="Volume semanal por grupo muscular">
+          <h2>Volume semanal direto</h2>
+          <p>Séries dominantes das fichas A/B/C. Sem contar duas vezes músculos auxiliares em compostos.</p>
+          <div className="elite-volume-grid">{weeklyVolume.map((row) => (
+            <div className="elite-volume-row" key={row.muscle}>
+              <span>{row.label}</span>
+              <div className="elite-volume-track"><i style={{ width: `${Math.min(100, row.sets * 10)}%` }} /></div>
+              <strong>{row.sets}</strong>
+            </div>
+          ))}</div>
+          <small>O volume de glúteos nos exercícios multiarticulares não é contabilizado separadamente neste painel.</small>
+        </section>
+      ) : null}
       {plans.length === 0 ? (
         <div className="plans-empty">
           <span className="plans-empty-icon" aria-hidden="true"><Dumbbell size={34} /></span>
@@ -158,7 +176,7 @@ export function PlansScreen({
             const totalSets = plan.exercises.reduce((total, exercise) => total + exercise.targetSets, 0);
             return (
               <article className={`plan-card${isActive ? ' is-active' : ''}`} key={plan.id}>
-                <button className="plan-card-main" type="button" onClick={() => setSelectedPlan(plan)}>
+                <button className="plan-card-main" type="button" onClick={() => { setMode('complete'); setSelectedPlan(plan); }}>
                   <span className="plan-card-icon" aria-hidden="true"><Dumbbell size={23} /></span>
                   <span className="plan-card-copy">
                     <span className="plan-card-title-row">
@@ -210,7 +228,9 @@ export function PlansScreen({
           onEdit={() => openEdit(selectedPlan)}
           onDelete={() => requestDelete(selectedPlan)}
           onDuplicate={() => { onDuplicate(selectedPlan.id); setSelectedPlan(null); }}
-          onStart={() => { onStart(selectedPlan); setSelectedPlan(null); }}
+          mode={mode}
+          onModeChange={setMode}
+          onStart={() => { onStart(selectedPlan, mode); setSelectedPlan(null); }}
         />
       ) : null}
 
@@ -243,6 +263,8 @@ function PlanDetailDialog({
   onDelete,
   onDuplicate,
   onStart,
+  mode,
+  onModeChange,
 }: {
   plan: WorkoutPlan;
   activeWorkout: ActiveWorkout | null;
@@ -251,9 +273,13 @@ function PlanDetailDialog({
   onDelete: () => void;
   onDuplicate: () => void;
   onStart: () => void;
+  mode: TrainingMode;
+  onModeChange: (mode: TrainingMode) => void;
 }) {
   const sameActivePlan = activeWorkout?.planId === plan.id;
   const anotherWorkoutIsActive = Boolean(activeWorkout && !sameActivePlan);
+  const canExpress = canUseExpress(plan);
+  const currentMode = canExpress ? mode : 'complete';
 
   return (
     <DialogShell title={plan.name} onClose={onClose}>
@@ -265,13 +291,20 @@ function PlanDetailDialog({
         </div>
       </div>
 
+      {canExpress && !activeWorkout ? (
+        <div className="elite-mode-picker" role="group" aria-label="Modo de treino">
+          <button type="button" className={currentMode === 'complete' ? 'is-selected' : ''} aria-pressed={currentMode === 'complete'} onClick={() => onModeChange('complete')}>Completo · {plannedSets(plan)} séries</button>
+          <button type="button" className={currentMode === 'express' ? 'is-selected' : ''} aria-pressed={currentMode === 'express'} onClick={() => onModeChange('express')}>Express · {plannedSets(plan, 'express')} séries</button>
+        </div>
+      ) : null}
       <div className="plan-detail-list">
-        {plan.exercises.map((exercise, index) => (
+        {getModeExercises(plan, currentMode).map((exercise, index) => (
           <article className="plan-detail-exercise" key={exercise.id}>
             <span className="plan-detail-number">{index + 1}</span>
             <div>
               <h3>{exercise.name}</h3>
-              <p>{exercise.targetSets} séries · {exercise.targetReps} reps · {formatRest(exercise.restSeconds)}</p>
+              <p>{exercise.targetSets} séries · {exercise.minReps && exercise.minReps !== exercise.targetReps ? `${exercise.minReps}–${exercise.targetReps}` : exercise.targetReps} reps · {formatRest(exercise.restSeconds)}</p>
+              {exercise.muscleGroup ? <small>{MUSCLE_LABELS[exercise.muscleGroup]}</small> : null}
               {exercise.supersetGroup ? <span className="plan-superset-badge"><Link2 size={13} /> Supersérie {exercise.supersetGroup}</span> : null}
               {exercise.notes ? <span>{exercise.notes}</span> : null}
             </div>
@@ -471,10 +504,22 @@ function ExerciseEditor({
 
       <div className="plan-exercise-numbers">
         <NumberField label="Séries" value={exercise.targetSets} min={1} max={20} onChange={(targetSets) => onChange({ targetSets })} />
-        <NumberField label="Reps" value={exercise.targetReps} min={1} max={999} onChange={(targetReps) => onChange({ targetReps })} />
+        <NumberField label="Reps mín." value={exercise.minReps ?? exercise.targetReps} min={1} max={exercise.targetReps} onChange={(minReps) => onChange({ minReps })} />
+        <NumberField label="Reps máx." value={exercise.targetReps} min={exercise.minReps ?? 1} max={999} onChange={(targetReps) => onChange({ targetReps })} />
         <NumberField label="Descanso (s)" value={exercise.restSeconds} min={0} max={1800} step={15} onChange={(restSeconds) => onChange({ restSeconds })} />
       </div>
 
+      <div className="plan-exercise-numbers">
+        <NumberField label="RIR mínimo" value={exercise.targetRirMin ?? 2} min={0} max={exercise.targetRirMax ?? 4} onChange={(targetRirMin) => onChange({ targetRirMin, targetRirMax: Math.max(targetRirMin, exercise.targetRirMax ?? 3) })}/>
+        <NumberField label="RIR máximo" value={exercise.targetRirMax ?? 3} min={exercise.targetRirMin ?? 0} max={4} onChange={(targetRirMax) => onChange({ targetRirMax, targetRirMin: Math.min(exercise.targetRirMin ?? 2, targetRirMax) })}/>
+      </div>
+      <label className="plans-field">
+        <span>Grupo muscular dominante <em>opcional</em></span>
+        <select value={exercise.muscleGroup ?? ''} onChange={(event) => onChange({ muscleGroup: (event.target.value || undefined) as MuscleGroup | undefined })}>
+          <option value="">Não classificado</option>
+          {Object.entries(MUSCLE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+      </label>
       <label className="plans-field plans-superset-field">
         <span>Supersérie <em>opcional</em></span>
         <div>

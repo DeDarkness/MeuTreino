@@ -2,22 +2,45 @@ import { describe, expect, it } from 'vitest';
 
 import type { AppState } from '../types';
 import { createSeedState, validateAppState } from './database';
-import { createWeeklyWorkoutPlans, getSuggestedPlanId, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION } from './starterPlans';
+import { applyPreSurgicalProtocol, createWeeklyWorkoutPlans, getSuggestedPlanId, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION } from './starterPlans';
 
 describe('treinos semanais prontos', () => {
-  it('cadastra o Full Body A/B/C com os 27 exercícios e 69 séries informados', () => {
+  it('cadastra o protocolo A/B/C com 28 exercícios e 60 séries efetivas', () => {
     const plans = createWeeklyWorkoutPlans('2026-09-02T12:00:00.000Z');
     expect(plans.map((plan) => plan.name)).toEqual(['Full Body A', 'Full Body B', 'Full Body C']);
-    expect(plans.reduce((total, plan) => total + plan.exercises.length, 0)).toBe(27);
+    expect(plans.reduce((total, plan) => total + plan.exercises.length, 0)).toBe(28);
     expect(plans.reduce(
       (total, plan) => total + plan.exercises.reduce((sets, item) => sets + item.targetSets, 0),
       0,
-    )).toBe(69);
-    expect(plans.map((plan) => plan.exercises.reduce((sets, item) => sets + item.targetSets, 0))).toEqual([22, 23, 24]);
-    expect(plans[0].exercises[0]).toMatchObject({ targetSets: 4, targetReps: 8, restSeconds: 180 });
-    expect(plans[0].exercises[0].notes).toContain('5–8 repetições · RIR 1–2');
+    )).toBe(60);
+    expect(plans.map((plan) => plan.exercises.reduce((sets, item) => sets + item.targetSets, 0))).toEqual([20, 19, 21]);
+    expect(plans[0].exercises[0]).toMatchObject({ targetSets: 3, targetReps: 10, restSeconds: 180 });
+    expect(plans[0].exercises[0].notes).toContain('6–10 repetições · RIR 2–3');
     expect(plans[0].exercises[5].supersetGroup).toBe('A');
     expect(plans[0].exercises[6].supersetGroup).toBe('A');
+  });
+
+  it('instala o protocolo apenas mediante ação explícita sem apagar histórico nem planos pessoais', () => {
+    const state = createSeedState('2026-10-01T10:00:00.000Z');
+    const personal = { ...state.plans[0], id: 'custom-1', name: 'Meu treino', updatedAt: '2026-10-01T12:00:00.000Z' };
+    const editedA = { ...state.plans[0], name: 'Full Body A adaptado', updatedAt: '2026-10-02T12:00:00.000Z' };
+    const history = [{
+      id: 'workout-hist', planId: 'plan-full-body-a', planName: 'Full Body A',
+      startedAt: '2026-10-03T12:00:00.000Z', finishedAt: '2026-10-03T13:00:00.000Z',
+      durationSeconds: 3600, exercises: [],
+    }];
+    const upgraded = applyPreSurgicalProtocol({ ...state, plans: [editedA, state.plans[1], state.plans[2], personal], history });
+    expect(upgraded.history).toEqual(history);
+    expect(upgraded.plans.filter((plan) => plan.id === 'custom-1')).toHaveLength(1);
+    expect(upgraded.plans.some((plan) => plan.name === 'Full Body A adaptado (versão pessoal anterior)')).toBe(true);
+    expect(upgraded.plans.find((plan) => plan.id === 'plan-full-body-a')?.exercises.length).toBe(9);
+    expect(state.plans[0].name).toBe('Full Body A');
+  });
+
+  it('impede trocar o plano durante uma sessão ativa', () => {
+    const state = createSeedState();
+    const modified = { ...state, activeWorkout: { id: 'workout', planId: null } } as AppState;
+    expect(() => applyPreSurgicalProtocol(modified)).toThrow('Finalize ou abandone');
   });
 
   it('sugere o treino correspondente ao dia atual', () => {

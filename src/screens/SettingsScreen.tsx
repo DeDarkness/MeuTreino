@@ -1,4 +1,4 @@
-import { BellRing, Check, Database, Download, LockKeyhole, Smartphone, Trash2, Upload, Volume2 } from 'lucide-react';
+import { BellRing, Check, Database, Dumbbell, Download, LockKeyhole, Smartphone, Trash2, Upload, Volume2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
 import { PushNotificationSettings } from '../components/PushNotificationSettings';
@@ -14,6 +14,7 @@ type SettingsScreenProps = {
   onExport: () => Promise<void>;
   onImport: (file: File) => Promise<void>;
   onClear: () => Promise<void>;
+  onInstallPreSurgicalProtocol: () => Promise<void>;
   onRequestPersistence: () => Promise<boolean>;
   pushStatus: PushStatus;
   onNotificationPermissionChange: () => void;
@@ -27,6 +28,7 @@ export function SettingsScreen({
   onExport,
   onImport,
   onClear,
+  onInstallPreSurgicalProtocol,
   onRequestPersistence,
   pushStatus,
   onNotificationPermissionChange,
@@ -109,6 +111,14 @@ export function SettingsScreen({
         </div>
       </SettingsGroup>
 
+      <SettingsGroup title="Protocolos de treino" icon={<Dumbbell />}>
+        <button className="setting-action" type="button" onClick={() => {
+          if (window.confirm('Aplicar Full Body pré-cirurgia (20/19/21 séries)? Isso substitui as fichas padrão A/B/C. O histórico e as demais fichas serão preservados. Fichas padrão editadas serão arquivadas como versões pessoais. Recomendamos exportar backup antes.')) {
+            void run(onInstallPreSurgicalProtocol, 'Protocolo pré-cirurgia instalado. Fichas e histórico pessoal preservados.');
+          }
+        }}><Dumbbell /> <span><strong>Aplicar Full Body pré-cirurgia</strong><small>60 séries semanais · A/B/C · atualização manual e reversível por backup.</small></span></button>
+      </SettingsGroup>
+
       <SettingsGroup title="Dados neste iPhone" icon={<Database />}>
         <div className="privacy-box"><LockKeyhole /><div><strong>Treinos neste aparelho</strong><p>Treinos e histórico ficam somente aqui. Se você ativar os avisos em segundo plano, a Cloudflare recebe apenas a inscrição de notificações e os avisos agendados.</p></div></div>
         <button className="setting-action" type="button" onClick={() => run(onExport, 'Backup exportado.')}><Download /> <span><strong>Exportar backup</strong><small>Salve uma cópia em JSON no app Arquivos.</small></span></button>
@@ -154,7 +164,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 6.1.2 · PWA pessoal e offline</span></footer>
+      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 6.3.0 · PWA pessoal e offline</span></footer>
     </section>
   );
 }

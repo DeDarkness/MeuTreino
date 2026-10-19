@@ -208,6 +208,12 @@ export function ActiveWorkoutScreen({
           <div className="active-workout__superset-badge"><Link2 aria-hidden="true" size={15} /> Supersérie {exercise.supersetGroup} · alterne com o exercício do mesmo grupo</div>
         ) : null}
 
+        {(exercise.minReps !== undefined || exercise.targetRirMin !== undefined) ? (
+          <p className="active-workout__notes">
+            {exercise.minReps !== undefined ? `Faixa: ${exercise.minReps}–${currentSet.targetReps} repetições` : `Meta: ${currentSet.targetReps} repetições`}
+            {exercise.targetRirMin !== undefined ? ` · RIR alvo: ${exercise.targetRirMin}${exercise.targetRirMax !== undefined && exercise.targetRirMax !== exercise.targetRirMin ? `–${exercise.targetRirMax}` : ''}` : ''}
+          </p>
+        ) : null}
         {exercise.notes ? <p className="active-workout__notes">{exercise.notes}</p> : null}
 
         <div className="active-workout__quick-actions">

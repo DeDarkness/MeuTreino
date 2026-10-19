@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react';
 
 import { formatDate, formatDuration, greeting, todayLabel } from '../lib/format';
 import { getSuggestedPlanId } from '../lib/starterPlans';
+import { canUseExpress, getModeExercises, plannedSets, type TrainingMode } from '../lib/trainingModes';
 import type { ActiveWorkout, Exercise, WorkoutHistory, WorkoutPlan } from '../types';
 
 type HomeScreenProps = {
@@ -19,7 +20,7 @@ type HomeScreenProps = {
   history: WorkoutHistory[];
   activeWorkout: ActiveWorkout | null;
   showInstallPrompt: boolean;
-  onStart: (plan: WorkoutPlan) => void;
+  onStart: (plan: WorkoutPlan, mode?: TrainingMode) => void;
   onContinue: () => void;
   onGoPlans: () => void;
   onGoHistory: () => void;
@@ -42,6 +43,7 @@ export function HomeScreen({
   onGoHistory,
 }: HomeScreenProps) {
   const todayPlanId = getSuggestedPlanId();
+  const [trainingMode, setTrainingMode] = useState<TrainingMode>('complete');
   const [selectedPlanId, setSelectedPlanId] = useState(() =>
     plans.some((plan) => plan.id === todayPlanId) ? todayPlanId : (plans[0]?.id ?? ''),
   );
@@ -56,7 +58,9 @@ export function HomeScreen({
     ?? plans[0];
   const selectedDay = WORKOUT_DAYS.find((day) => day.planId === selectedPlan?.id);
   const availableDays = WORKOUT_DAYS.filter((day) => plans.some((plan) => plan.id === day.planId));
-  const selectedSets = selectedPlan?.exercises.reduce((sum, item) => sum + item.targetSets, 0) ?? 0;
+  const expressAvailable = selectedPlan ? canUseExpress(selectedPlan) : false;
+  const selectedMode = activeWorkout ? 'complete' : expressAvailable ? trainingMode : 'complete';
+  const selectedSets = selectedPlan ? plannedSets(selectedPlan, selectedMode) : 0;
   const weekStart = new Date();
   weekStart.setHours(0, 0, 0, 0);
   weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
@@ -130,34 +134,40 @@ export function HomeScreen({
           <p className="eyebrow">{selectedDay?.label ?? 'Treino escolhido'}</p>
           <h2>{selectedPlan.notes || selectedPlan.name}</h2>
           <p className="day-workout-hero__name">{selectedPlan.name}</p>
+          {expressAvailable && !activeWorkout ? (
+            <div className="elite-mode-picker" role="group" aria-label="Duração do treino">
+              <button type="button" className={selectedMode === 'complete' ? 'is-selected' : ''} aria-pressed={selectedMode === 'complete'} onClick={() => setTrainingMode('complete')}>Completo · 75–90 min</button>
+              <button type="button" className={selectedMode === 'express' ? 'is-selected' : ''} aria-pressed={selectedMode === 'express'} onClick={() => setTrainingMode('express')}>Express · ~50–60 min</button>
+            </div>
+          ) : null}
           <div className="hero-meta">
-            <span><Dumbbell size={16} /> {selectedPlan.exercises.length} exercícios</span>
+            <span><Dumbbell size={16} /> {getModeExercises(selectedPlan, selectedMode).length} exercícios</span>
             <span><Flame size={16} /> {selectedSets} séries</span>
           </div>
 
           <div className="workout-preview" aria-label="Primeiros exercícios">
-            {selectedPlan.exercises.slice(0, 3).map((exercise, index) => (
+            {getModeExercises(selectedPlan, selectedMode).slice(0, 3).map((exercise, index) => (
               <div className="workout-preview__row" key={exercise.id}>
                 <span>{String(index + 1).padStart(2, '0')}</span>
                 <strong>{exercise.name}</strong>
                 <small>{exercise.targetSets}×{repTarget(exercise)}</small>
               </div>
             ))}
-            {selectedPlan.exercises.length > 3 ? <div className="workout-preview__more">+ {selectedPlan.exercises.length - 3} exercícios</div> : null}
+            {getModeExercises(selectedPlan, selectedMode).length > 3 ? <div className="workout-preview__more">+ {getModeExercises(selectedPlan, selectedMode).length - 3} exercícios</div> : null}
           </div>
 
           <button
             className="button button-primary button-wide button-kinetic"
             type="button"
             disabled={anotherWorkoutIsActive}
-            onClick={() => selectedWorkoutIsActive ? onContinue() : onStart(selectedPlan)}
+            onClick={() => selectedWorkoutIsActive ? onContinue() : onStart(selectedPlan, selectedMode)}
           >
             <Play size={20} fill="currentColor" />
             {selectedWorkoutIsActive
               ? 'Continuar este treino'
               : anotherWorkoutIsActive
                 ? 'Finalize o treino em andamento'
-                : `Iniciar ${selectedDay?.label ?? 'treino'}`}
+                : `Iniciar ${selectedDay?.label ?? 'treino'}${selectedMode === 'express' ? ' · Express' : ''}`}
           </button>
         </article>
       ) : (
@@ -189,6 +199,7 @@ export function HomeScreen({
 }
 
 function repTarget(exercise: Exercise) {
+  if (exercise.minReps && exercise.minReps < exercise.targetReps) return `${exercise.minReps}–${exercise.targetReps}`;
   const range = exercise.notes?.match(/Meta: (.+?) repetições/i)?.[1];
   return range ?? exercise.targetReps;
 }

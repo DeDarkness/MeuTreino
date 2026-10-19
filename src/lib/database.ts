@@ -11,7 +11,7 @@ import {
   type WorkoutSetHistory,
   type WallpaperAsset,
 } from '../types';
-import { createWeeklyWorkoutPlans, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION } from './starterPlans';
+import { createWeeklyWorkoutPlans, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION, ELITE_PROTOCOL_VERSION, upgradeEliteProtocol } from './starterPlans';
 
 const DATABASE_NAME = 'meutreino';
 const DATABASE_VERSION = 2;
@@ -73,6 +73,16 @@ function validateExercise(value: unknown, path: string, issues: string[]): value
   if (!isNonEmptyString(value.name)) issues.push(`${path}.name é obrigatório`);
   if (!isBoundedInteger(value.targetSets, 1, MAX_SETS_PER_EXERCISE)) issues.push(`${path}.targetSets deve estar entre 1 e ${MAX_SETS_PER_EXERCISE}`);
   if (!isBoundedInteger(value.targetReps, 1, MAX_REPS)) issues.push(`${path}.targetReps deve estar entre 1 e ${MAX_REPS}`);
+  if (value.minReps !== undefined && (!isBoundedInteger(value.minReps, 1, MAX_REPS) || (typeof value.targetReps === 'number' && value.minReps > value.targetReps))) {
+    issues.push(`${path}.minReps deve estar entre 1 e a meta máxima`);
+  }
+  if (value.targetRirMin !== undefined && !isBoundedInteger(value.targetRirMin, 0, 4)) issues.push(`${path}.targetRirMin deve estar entre 0 e 4`);
+  if (value.targetRirMax !== undefined && (!isBoundedInteger(value.targetRirMax, 0, 4) || (typeof value.targetRirMin === 'number' && value.targetRirMax < value.targetRirMin))) {
+    issues.push(`${path}.targetRirMax deve ser válido e maior ou igual ao mínimo`);
+  }
+  if (value.muscleGroup !== undefined && !['quadriceps', 'posterior', 'gluteos', 'peito', 'costas', 'ombros', 'deltoide_posterior', 'biceps', 'triceps', 'panturrilhas', 'core'].includes(String(value.muscleGroup))) {
+    issues.push(`${path}.muscleGroup não reconhecido`);
+  }
   if (!isBoundedInteger(value.restSeconds, 0, MAX_REST_SECONDS)) issues.push(`${path}.restSeconds deve estar entre 0 e ${MAX_REST_SECONDS}`);
   if (isNonEmptyString(value.name) && value.name.length > 120) issues.push(`${path}.name é muito longo`);
   if (value.notes !== undefined && typeof value.notes !== 'string') issues.push(`${path}.notes deve ser texto`);
@@ -197,6 +207,10 @@ function validateActiveWorkout(value: unknown, path: string, issues: string[]): 
       if (!isNonEmptyString(exercise.exerciseId)) issues.push(`${exercisePath}.exerciseId é obrigatório`);
       if (!isNonEmptyString(exercise.exerciseName)) issues.push(`${exercisePath}.exerciseName é obrigatório`);
       if (!isBoundedInteger(exercise.restSeconds, 0, MAX_REST_SECONDS)) issues.push(`${exercisePath}.restSeconds deve estar entre 0 e ${MAX_REST_SECONDS}`);
+      if (exercise.minReps !== undefined && !isBoundedInteger(exercise.minReps, 1, MAX_REPS)) issues.push(`${exercisePath}.minReps inválido`);
+      if (exercise.targetRirMin !== undefined && !isBoundedInteger(exercise.targetRirMin, 0, 4)) issues.push(`${exercisePath}.targetRirMin inválido`);
+      if (exercise.targetRirMax !== undefined && (!isBoundedInteger(exercise.targetRirMax, 0, 4) || (typeof exercise.targetRirMin === 'number' && exercise.targetRirMax < exercise.targetRirMin))) issues.push(`${exercisePath}.targetRirMax inválido`);
+      if (exercise.muscleGroup !== undefined && !['quadriceps', 'posterior', 'gluteos', 'peito', 'costas', 'ombros', 'deltoide_posterior', 'biceps', 'triceps', 'panturrilhas', 'core'].includes(String(exercise.muscleGroup))) issues.push(`${exercisePath}.muscleGroup inválido`);
       if (exercise.notes !== undefined && typeof exercise.notes !== 'string') issues.push(`${exercisePath}.notes deve ser texto`);
       if (exercise.supersetGroup !== undefined && (typeof exercise.supersetGroup !== 'string' || exercise.supersetGroup.length > 12)) {
         issues.push(`${exercisePath}.supersetGroup deve ser um texto curto`);
@@ -269,6 +283,10 @@ export function validateAppState(value: unknown): AppState {
   ) {
     issues.push(`starterPlanVersion incompatível (máximo ${STARTER_PLAN_VERSION})`);
   }
+  if (value.eliteProtocolVersion !== undefined
+    && (!isNonNegativeInteger(value.eliteProtocolVersion) || value.eliteProtocolVersion > ELITE_PROTOCOL_VERSION)) {
+    issues.push(`eliteProtocolVersion incompatível (máximo ${ELITE_PROTOCOL_VERSION})`);
+  }
   if (!Array.isArray(value.plans)) {
     issues.push('plans deve ser uma lista');
   } else {
@@ -295,6 +313,7 @@ export function createSeedState(now = new Date().toISOString()): AppState {
   return {
     schemaVersion: APP_STATE_SCHEMA_VERSION,
     starterPlanVersion: STARTER_PLAN_VERSION,
+    eliteProtocolVersion: ELITE_PROTOCOL_VERSION,
     plans: createWeeklyWorkoutPlans(now),
     history: [],
     activeWorkout: null,
@@ -426,7 +445,7 @@ export async function loadState(): Promise<AppState> {
     const stored = await readRecord(database);
     if (stored) {
       const validated = validateAppState(stored.value);
-      const upgraded = installWeeklyWorkoutPlans(validated);
+      const upgraded = upgradeEliteProtocol(installWeeklyWorkoutPlans(validated));
       if (upgraded !== validated) await writeRecord(database, upgraded);
       return cloneState(upgraded);
     }

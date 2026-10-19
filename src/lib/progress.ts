@@ -84,8 +84,8 @@ export function getLoadSuggestion(
 ): LoadSuggestion | null {
   const targetSets = 'targetSets' in exercise ? exercise.targetSets : exercise.sets.length;
   const targetReps = 'targetReps' in exercise
-    ? upperRepTarget(exercise.notes, exercise.targetReps)
-    : upperRepTarget(exercise.notes, Math.max(...exercise.sets.map((set) => set.targetReps)));
+    ? exercise.targetReps
+    : Math.max(...exercise.sets.map((set) => set.targetReps));
   const latest = [...history]
     .sort((left, right) => Date.parse(right.finishedAt) - Date.parse(left.finishedAt))
     .map((workout) => ({
@@ -140,10 +140,6 @@ export function estimateOneRepMax(weight: number, reps: number) {
   return weight * (1 + Math.max(0, reps) / 30);
 }
 
-function upperRepTarget(notes: string | undefined, fallback: number) {
-  const match = notes?.match(/Meta:\s*\d+\s*[–-]\s*(\d+)\s*repetições/i);
-  return match ? Number(match[1]) : fallback;
-}
 
 function maximumNullable(left: number | null, right: number | null) {
   if (left === null) return right;
