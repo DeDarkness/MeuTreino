@@ -1,5 +1,6 @@
 import { Check, Clock3, Dumbbell, Share2, Sparkles, Target, TrendingUp, Trophy, X, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useDialogFocus } from '../hooks/useDialogFocus';
 
 import { formatDuration, formatWeight } from '../lib/format';
 import { getPotentialRecordLabels } from '../lib/progress';
@@ -22,6 +23,7 @@ export function WorkoutSummaryDialog({
   onViewProgress,
 }: WorkoutSummaryDialogProps) {
   const [shared, setShared] = useState(false);
+  const dialogRef = useDialogFocus(onClose);
   const summary = useMemo(() => buildSummary(workout, previousHistory), [previousHistory, workout]);
 
   const share = async () => {
@@ -37,7 +39,7 @@ export function WorkoutSummaryDialog({
 
   return (
     <div className="workout-summary-backdrop" role="presentation">
-      <section className="workout-summary-dialog" role="dialog" aria-modal="true" aria-labelledby="workout-summary-title">
+      <section className="workout-summary-dialog" ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="workout-summary-title">
         <div className="workout-summary-confetti" aria-hidden="true"><i /><i /><i /><i /><i /><i /></div>
         <button className="workout-summary-close" type="button" aria-label="Fechar resumo" onClick={onClose}><X /></button>
         <div className="workout-summary-hero">
@@ -66,8 +68,8 @@ export function WorkoutSummaryDialog({
         <div className="workout-summary-insights">
           <div>
             <TrendingUp aria-hidden="true" />
-            <span>Volume vs. treino anterior</span>
-            <strong>{summary.volumeDelta === null ? 'Primeiro registro' : formatDelta(summary.volumeDelta, weightUnit)}</strong>
+            <span>Volume vs. sessão equivalente</span>
+            <strong>{summary.volumeDelta === null ? 'Sem comparação' : formatDelta(summary.volumeDelta, weightUnit)}</strong>
           </div>
           <div>
             <Target aria-hidden="true" />
@@ -100,7 +102,10 @@ function buildSummary(workout: WorkoutHistory, previousHistory: WorkoutHistory[]
     return labels.size ? [{ exerciseName: exercise.exerciseName, labels: [...labels] }] : [];
   });
   const previous = [...previousHistory]
-    .filter((item) => item.planId === workout.planId || item.planName === workout.planName)
+    .filter((item) => (item.planId === workout.planId || item.planName === workout.planName)
+      && (item.trainingMode ?? (item.planName.endsWith(' · Express') ? 'express' : 'complete')) === (workout.trainingMode ?? (workout.planName.endsWith(' · Express') ? 'express' : 'complete'))
+      && item.exercises.length === workout.exercises.length
+      && item.exercises.every((exercise, index) => exercise.exerciseId === workout.exercises[index].exerciseId && exercise.sets.length === workout.exercises[index].sets.length))
     .sort((left, right) => Date.parse(right.finishedAt) - Date.parse(left.finishedAt))[0];
   const previousVolume = previous?.exercises.flatMap((exercise) => exercise.sets)
     .reduce((sum, set) => sum + (set.weight ?? 0) * set.reps, 0);

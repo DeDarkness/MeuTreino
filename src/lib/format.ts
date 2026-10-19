@@ -44,7 +44,7 @@ export function todayLabel(): string {
 export function formatWeight(value: number | null, unit: 'kg' | 'lb'): string {
   if (value === null) return '—';
   const converted = unit === 'lb' ? value * 2.2046226218 : value;
-  return `${Number.isInteger(converted) ? converted : converted.toFixed(1)} ${unit}`;
+  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(converted)} ${unit}`;
 }
 
 export function toStoredWeight(value: number, unit: 'kg' | 'lb'): number {
@@ -54,5 +54,5 @@ export function toStoredWeight(value: number, unit: 'kg' | 'lb'): number {
 export function fromStoredWeight(value: number | null, unit: 'kg' | 'lb'): number | null {
   if (value === null) return null;
   const converted = unit === 'lb' ? value * 2.2046226218 : value;
-  return Math.round(converted * 10) / 10;
+  return Math.round(converted * 100) / 100;
 }

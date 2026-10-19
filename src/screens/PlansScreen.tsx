@@ -10,22 +10,28 @@ import {
   Play,
   Plus,
   Save,
+  Search,
   Trash2,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
 
 import { useNumericDraft } from '../hooks/useNumericDraft';
-import type { ActiveWorkout, Exercise, WorkoutPlan, MuscleGroup } from '../types';
-import { canUseExpress, getModeExercises, MUSCLE_LABELS, plannedSets, weeklyMuscleVolumes, type TrainingMode } from '../lib/trainingModes';
+import type { ActiveWorkout, Exercise, WorkoutPlan, WorkoutHistory, Preferences, MuscleGroup } from '../types';
+import { canUseExpress, getModeExercises, MUSCLE_LABELS, plannedSets, type TrainingMode } from '../lib/trainingModes';
+import { WeeklyDashboard } from '../components/WeeklyDashboard';
+import { searchText } from '../lib/weeklyInsights';
 import './plans-screen.css';
 
 export interface PlansScreenProps {
   plans: WorkoutPlan[];
   activeWorkout: ActiveWorkout | null;
   defaultRestSeconds: number;
+  history: WorkoutHistory[];
+  weeklyPlanModes: Preferences['weeklyPlanModes'];
+  onModesChange: (modes: Record<string, TrainingMode>) => void;
   onStart: (plan: WorkoutPlan, mode?: TrainingMode) => void;
-  onSave: (plan: WorkoutPlan) => void;
+  onSave: (plan: WorkoutPlan) => Promise<unknown>;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
 }
@@ -75,6 +81,9 @@ export function PlansScreen({
   plans,
   activeWorkout,
   defaultRestSeconds,
+  history,
+  weeklyPlanModes,
+  onModesChange,
   onStart,
   onSave,
   onDelete,
@@ -84,14 +93,22 @@ export function PlansScreen({
   const [mode, setMode] = useState<TrainingMode>('complete');
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [editorDirty, setEditorDirty] = useState(false);
+  const [savingEditor, setSavingEditor] = useState(false);
+  const [editorError, setEditorError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<WorkoutPlan | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [showArchives, setShowArchives] = useState(false);
+  const archiveCount = plans.filter((plan) => plan.id.startsWith('plan-arquivo-')).length;
+  const filteredPlans = plans.filter((plan) => (showArchives || query.trim() || !plan.id.startsWith('plan-arquivo-'))
+    && searchText(`${plan.name} ${plan.exercises.map((exercise) => exercise.name).join(' ')}`).includes(searchText(query)));
 
   const closeEditor = useCallback(() => {
+    if (savingEditor) return;
     if (editorDirty && !window.confirm('Descartar as alterações não salvas deste treino?')) return;
     setEditor(null);
     setEditorDirty(false);
-  }, [editorDirty]);
+  }, [editorDirty, savingEditor]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -106,20 +123,20 @@ export function PlansScreen({
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [closeEditor, deleteTarget, editor, selectedPlan]);
 
-  const volumePlans = useMemo(() => plans.filter((plan) => ['plan-full-body-a','plan-full-body-b','plan-full-body-c'].includes(plan.id)), [plans]);
-  const weeklyVolume = useMemo(() => weeklyMuscleVolumes(volumePlans), [volumePlans]);
   const exerciseCount = useMemo(
     () => plans.reduce((total, plan) => total + plan.exercises.length, 0),
     [plans],
   );
 
   const openCreate = () => {
+    setEditorError(null);
     setOpenMenuId(null);
     setEditorDirty(false);
     setEditor(newEditorState(defaultRestSeconds));
   };
 
   const openEdit = (plan: WorkoutPlan) => {
+    setEditorError(null);
     setOpenMenuId(null);
     setSelectedPlan(null);
     setEditorDirty(false);
@@ -146,20 +163,10 @@ export function PlansScreen({
         </div>
       </header>
 
-      {weeklyVolume.length > 0 ? (
-        <section className="elite-volume-card" aria-label="Volume semanal por grupo muscular">
-          <h2>Volume semanal direto</h2>
-          <p>Séries dominantes das fichas A/B/C. Sem contar duas vezes músculos auxiliares em compostos.</p>
-          <div className="elite-volume-grid">{weeklyVolume.map((row) => (
-            <div className="elite-volume-row" key={row.muscle}>
-              <span>{row.label}</span>
-              <div className="elite-volume-track"><i style={{ width: `${Math.min(100, row.sets * 10)}%` }} /></div>
-              <strong>{row.sets}</strong>
-            </div>
-          ))}</div>
-          <small>O volume de glúteos nos exercícios multiarticulares não é contabilizado separadamente neste painel.</small>
-        </section>
-      ) : null}
+      <WeeklyDashboard plans={plans} history={history} modes={weeklyPlanModes} onModesChange={onModesChange} />
+      <label className="elite-search"><Search size={19} aria-hidden="true" /><input type="search" aria-label="Buscar treino ou exercício" placeholder="Buscar treino ou exercício…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      {archiveCount > 0 ? <button className="elite-expand" type="button" aria-pressed={showArchives} onClick={() => setShowArchives(!showArchives)}>{showArchives ? 'Ocultar' : 'Mostrar'} versões anteriores ({archiveCount})</button> : null}
+      {plans.length > 0 && filteredPlans.length === 0 ? <p className="elite-empty-search">Nenhum treino encontrado para “{query}”. Tente o nome de um exercício.</p> : null}
       {plans.length === 0 ? (
         <div className="plans-empty">
           <span className="plans-empty-icon" aria-hidden="true"><Dumbbell size={34} /></span>
@@ -171,12 +178,12 @@ export function PlansScreen({
         </div>
       ) : (
         <div className="plans-list">
-          {plans.map((plan) => {
+          {filteredPlans.map((plan) => {
             const isActive = activeWorkout?.planId === plan.id;
             const totalSets = plan.exercises.reduce((total, exercise) => total + exercise.targetSets, 0);
             return (
               <article className={`plan-card${isActive ? ' is-active' : ''}`} key={plan.id}>
-                <button className="plan-card-main" type="button" onClick={() => { setMode('complete'); setSelectedPlan(plan); }}>
+                <button className="plan-card-main" type="button" onClick={() => { setMode(canUseExpress(plan) ? weeklyPlanModes?.[plan.id] ?? 'complete' : 'complete'); setSelectedPlan(plan); }}>
                   <span className="plan-card-icon" aria-hidden="true"><Dumbbell size={23} /></span>
                   <span className="plan-card-copy">
                     <span className="plan-card-title-row">
@@ -229,7 +236,7 @@ export function PlansScreen({
           onDelete={() => requestDelete(selectedPlan)}
           onDuplicate={() => { onDuplicate(selectedPlan.id); setSelectedPlan(null); }}
           mode={mode}
-          onModeChange={setMode}
+          onModeChange={(next) => { setMode(next); onModesChange({ ...weeklyPlanModes, [selectedPlan.id]: next }); }}
           onStart={() => { onStart(selectedPlan, mode); setSelectedPlan(null); }}
         />
       ) : null}
@@ -240,7 +247,15 @@ export function PlansScreen({
           defaultRestSeconds={defaultRestSeconds}
           onChange={(next) => { setEditor(next); setEditorDirty(true); }}
           onClose={closeEditor}
-          onSave={(plan) => { onSave(plan); setEditorDirty(false); setEditor(null); }}
+          saving={savingEditor}
+          error={editorError}
+          onSave={(plan) => {
+            if (savingEditor) return;
+            setSavingEditor(true); setEditorError(null);
+            void onSave(plan).then(() => { setEditorDirty(false); setEditor(null); })
+              .catch((cause: unknown) => setEditorError(cause instanceof Error ? cause.message : 'Não foi possível salvar. Suas edições continuam aqui.'))
+              .finally(() => setSavingEditor(false));
+          }}
         />
       ) : null}
 
@@ -342,12 +357,16 @@ function PlanEditorDialog({
   onChange,
   onClose,
   onSave,
+  saving,
+  error,
 }: {
   state: EditorState;
   defaultRestSeconds: number;
   onChange: (state: EditorState) => void;
   onClose: () => void;
   onSave: (plan: WorkoutPlan) => void;
+  saving: boolean;
+  error: string | null;
 }) {
   const [submitted, setSubmitted] = useState(false);
   const valid = state.name.trim().length > 0
@@ -372,7 +391,7 @@ function PlanEditorDialog({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setSubmitted(true);
-    if (!valid) return;
+    if (!valid || saving) return;
     const updatedAt = new Date().toISOString();
     onSave({
       id: state.id,
@@ -391,7 +410,7 @@ function PlanEditorDialog({
 
   return (
     <DialogShell title={state.name.trim() ? `Editar ${state.name}` : 'Novo treino'} onClose={onClose} wide>
-      <form className="plan-editor" id="plan-editor-form" onSubmit={submit} noValidate>
+      <form className="plan-editor" id="plan-editor-form" onSubmit={submit} noValidate aria-busy={saving} inert={saving}>
         <label className="plans-field">
           <span>Nome do treino</span>
           <input
@@ -450,12 +469,13 @@ function PlanEditorDialog({
         ) : null}
 
         {submitted && !valid ? <p className="plans-form-error">Preencha o nome do treino e de todos os exercícios.</p> : null}
+        {error ? <p className="plans-form-error" role="alert">{error}</p> : null}
       </form>
 
       <div className="plans-dialog-sticky-footer plans-editor-footer">
-        <button className="plans-secondary-button" type="button" onClick={onClose}>Cancelar</button>
-        <button className="plans-primary-button" type="submit" form="plan-editor-form">
-          <Save size={20} /> Salvar treino
+        <button className="plans-secondary-button" type="button" disabled={saving} onClick={onClose}>Cancelar</button>
+        <button className="plans-primary-button" type="submit" form="plan-editor-form" disabled={saving}>
+          <Save size={20} /> {saving ? 'Salvando…' : 'Salvar treino'}
         </button>
       </div>
     </DialogShell>
@@ -513,6 +533,14 @@ function ExerciseEditor({
         <NumberField label="RIR mínimo" value={exercise.targetRirMin ?? 2} min={0} max={exercise.targetRirMax ?? 4} onChange={(targetRirMin) => onChange({ targetRirMin, targetRirMax: Math.max(targetRirMin, exercise.targetRirMax ?? 3) })}/>
         <NumberField label="RIR máximo" value={exercise.targetRirMax ?? 3} min={exercise.targetRirMin ?? 0} max={4} onChange={(targetRirMax) => onChange({ targetRirMax, targetRirMin: Math.min(exercise.targetRirMin ?? 2, targetRirMax) })}/>
       </div>
+      <label className="plans-field">
+        <span>Incremento de carga</span>
+        <select value={exercise.loadIncrementKg ?? ''} onChange={(event) => onChange({ loadIncrementKg: event.target.value ? Number(event.target.value) : undefined })}>
+          <option value="">Automático conservador (até 5%)</option>
+          {[0.25, 0.5, 1, 1.25, 2.5, 5].map((step) => <option key={step} value={step}>{step.toLocaleString('pt-BR')} kg</option>)}
+        </select>
+        <small>Informe o menor passo disponível no equipamento. Valores são armazenados em kg; sugestões também respeitam repetições e RIR.</small>
+      </label>
       <label className="plans-field">
         <span>Grupo muscular dominante <em>opcional</em></span>
         <select value={exercise.muscleGroup ?? ''} onChange={(event) => onChange({ muscleGroup: (event.target.value || undefined) as MuscleGroup | undefined })}>

@@ -17,6 +17,7 @@ const DATABASE_NAME = 'meutreino';
 const DATABASE_VERSION = 2;
 const STATE_STORE = 'state';
 const STATE_KEY = 'app-state';
+const SAFETY_KEY = 'safety-checkpoint-v1';
 const WALLPAPER_STORE = 'wallpaper';
 const WALLPAPER_KEY = 'active-wallpaper' as const;
 const BACKUP_VERSION = 1 as const;
@@ -63,12 +64,21 @@ const isWeight = (value: unknown): value is number | null =>
 const isBoundedInteger = (value: unknown, min: number, max: number): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
 
+const muscleGroups = new Set(['quadriceps', 'posterior', 'gluteos', 'peito', 'costas', 'ombros', 'deltoide_posterior', 'biceps', 'triceps', 'panturrilhas', 'core']);
+
+function validateOptionalMetadata(value: Record<string, unknown>, path: string, issues: string[]) {
+  if (value.loadIncrementKg !== undefined && (typeof value.loadIncrementKg !== 'number' || !Number.isFinite(value.loadIncrementKg) || value.loadIncrementKg <= 0 || value.loadIncrementKg > 100)) issues.push(`${path}.loadIncrementKg inválido`);
+  if (value.trainingMode !== undefined && value.trainingMode !== 'complete' && value.trainingMode !== 'express') issues.push(`${path}.trainingMode inválido`);
+  if (value.muscleGroup !== undefined && !muscleGroups.has(String(value.muscleGroup))) issues.push(`${path}.muscleGroup inválido`);
+}
+
 function validateExercise(value: unknown, path: string, issues: string[]): value is Exercise {
   if (!isRecord(value)) {
     issues.push(`${path} deve ser um objeto`);
     return false;
   }
 
+  validateOptionalMetadata(value, path, issues);
   if (!isNonEmptyString(value.id)) issues.push(`${path}.id é obrigatório`);
   if (!isNonEmptyString(value.name)) issues.push(`${path}.name é obrigatório`);
   if (!isBoundedInteger(value.targetSets, 1, MAX_SETS_PER_EXERCISE)) issues.push(`${path}.targetSets deve estar entre 1 e ${MAX_SETS_PER_EXERCISE}`);
@@ -141,6 +151,7 @@ function validateHistoryExercise(
     return false;
   }
 
+  validateOptionalMetadata(value, path, issues);
   if (!isNonEmptyString(value.exerciseId)) issues.push(`${path}.exerciseId é obrigatório`);
   if (!isNonEmptyString(value.exerciseName)) issues.push(`${path}.exerciseName é obrigatório`);
   if (!Array.isArray(value.sets)) {
@@ -157,6 +168,7 @@ function validateHistory(value: unknown, path: string, issues: string[]): value 
     return false;
   }
 
+  validateOptionalMetadata(value, path, issues);
   if (!isNonEmptyString(value.id)) issues.push(`${path}.id é obrigatório`);
   if (value.planId !== null && !isNonEmptyString(value.planId)) issues.push(`${path}.planId deve ser nulo ou texto`);
   if (!isNonEmptyString(value.planName)) issues.push(`${path}.planName é obrigatório`);
@@ -179,6 +191,7 @@ function validateActiveWorkout(value: unknown, path: string, issues: string[]): 
     return false;
   }
 
+  validateOptionalMetadata(value, path, issues);
   if (!isNonEmptyString(value.id)) issues.push(`${path}.id é obrigatório`);
   if (value.planId !== null && !isNonEmptyString(value.planId)) issues.push(`${path}.planId deve ser nulo ou texto`);
   if (!isNonEmptyString(value.planName)) issues.push(`${path}.planName é obrigatório`);
@@ -204,6 +217,7 @@ function validateActiveWorkout(value: unknown, path: string, issues: string[]): 
         issues.push(`${exercisePath} deve ser um objeto`);
         return;
       }
+      validateOptionalMetadata(exercise, exercisePath, issues);
       if (!isNonEmptyString(exercise.exerciseId)) issues.push(`${exercisePath}.exerciseId é obrigatório`);
       if (!isNonEmptyString(exercise.exerciseName)) issues.push(`${exercisePath}.exerciseName é obrigatório`);
       if (!isBoundedInteger(exercise.restSeconds, 0, MAX_REST_SECONDS)) issues.push(`${exercisePath}.restSeconds deve estar entre 0 e ${MAX_REST_SECONDS}`);
@@ -267,6 +281,10 @@ function validatePreferences(value: unknown, path: string, issues: string[]): va
   if (typeof value.vibrationEnabled !== 'boolean') issues.push(`${path}.vibrationEnabled deve ser booleano`);
   if (value.restAlertSound !== 'bell' && value.restAlertSound !== 'beep') issues.push(`${path}.restAlertSound é inválido`);
   if (value.weightUnit !== 'kg' && value.weightUnit !== 'lb') issues.push(`${path}.weightUnit é inválido`);
+  if (value.reduceMotion !== undefined && typeof value.reduceMotion !== 'boolean') issues.push(`${path}.reduceMotion inválido`);
+  if (value.weeklyPlanModes !== undefined && (!isRecord(value.weeklyPlanModes)
+    || Object.keys(value.weeklyPlanModes).length > 200
+    || Object.values(value.weeklyPlanModes).some((mode) => mode !== 'complete' && mode !== 'express'))) issues.push(`${path}.weeklyPlanModes inválido`);
   return true;
 }
 
@@ -364,10 +382,19 @@ function readRecord(database: IDBDatabase): Promise<StoredStateRecord | undefine
   });
 }
 
-function writeRecord(database: IDBDatabase, state: AppState): Promise<void> {
+function writeRecord(database: IDBDatabase, state: AppState, checkpointLabel?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(STATE_STORE, 'readwrite');
-    transaction.objectStore(STATE_STORE).put({ id: STATE_KEY, value: state } satisfies StoredStateRecord);
+    const store = transaction.objectStore(STATE_STORE);
+    const put = () => store.put({ id: STATE_KEY, value: state } satisfies StoredStateRecord);
+    if (checkpointLabel) {
+      const previous = store.get(STATE_KEY);
+      previous.onsuccess = () => {
+        const record = previous.result as StoredStateRecord | undefined;
+        if (record) store.put({ id: SAFETY_KEY, value: record.value, label: checkpointLabel, createdAt: new Date().toISOString() });
+        put();
+      };
+    } else put();
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error ?? new Error('Não foi possível salvar os dados locais.'));
     transaction.onabort = () => reject(transaction.error ?? new Error('A gravação dos dados locais foi cancelada.'));
@@ -446,7 +473,7 @@ export async function loadState(): Promise<AppState> {
     if (stored) {
       const validated = validateAppState(stored.value);
       const upgraded = upgradeEliteProtocol(installWeeklyWorkoutPlans(validated));
-      if (upgraded !== validated) await writeRecord(database, upgraded);
+      if (upgraded !== validated) await writeRecord(database, upgraded, 'Antes da atualização das fichas');
       return cloneState(upgraded);
     }
 
@@ -458,13 +485,13 @@ export async function loadState(): Promise<AppState> {
   }
 }
 
-export async function saveState(state: AppState): Promise<AppState> {
+export async function saveState(state: AppState, checkpointLabel?: string): Promise<AppState> {
   const timestamp = new Date().toISOString();
   const validated = validateAppState({ ...state, updatedAt: timestamp });
   const next = cloneState(installWeeklyWorkoutPlans(validated, timestamp));
   const database = await openDatabase();
   try {
-    await writeRecord(database, next);
+    await writeRecord(database, next, checkpointLabel);
     return cloneState(next);
   } finally {
     database.close();
@@ -511,7 +538,37 @@ export async function importState(source: string | unknown): Promise<AppState> {
     candidate = parsed.state;
   }
 
-  return saveState(validateAppState(candidate));
+  return saveState(validateAppState(candidate), 'Antes da importação ou troca de protocolo');
+}
+
+export async function readSafetySnapshot(): Promise<{ value: AppState; label: string; createdAt: string } | null> {
+  const database = await openDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = database.transaction(STATE_STORE, 'readonly').objectStore(STATE_STORE).get(SAFETY_KEY);
+      request.onsuccess = () => resolve(request.result ?? null);
+      request.onerror = () => reject(request.error);
+    });
+  } finally { database.close(); }
+}
+
+export async function exportSafetySnapshot(): Promise<string> {
+  const checkpoint = await readSafetySnapshot();
+  if (!checkpoint) throw new Error('Nenhuma cópia de segurança local está disponível.');
+  return JSON.stringify({ app: 'MeuTreino', backupVersion: BACKUP_VERSION, exportedAt: checkpoint.createdAt, state: validateAppState(checkpoint.value) } satisfies AppStateBackup, null, 2);
+}
+
+export async function clearSafetySnapshot(): Promise<void> {
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(STATE_STORE, 'readwrite');
+      transaction.objectStore(STATE_STORE).delete(SAFETY_KEY);
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally { database.close(); }
 }
 
 export const workoutDatabase = {

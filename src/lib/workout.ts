@@ -19,6 +19,19 @@ export interface WorkoutPlanInput {
 
 export type ActiveSetPatch = Partial<Pick<ActiveWorkoutSet, 'reps' | 'weight' | 'rir'>>;
 
+/** Editing a completed set must not announce it as the next set after rest. */
+export function getRestTarget(workout: ActiveWorkout) {
+  const selected = workout.exercises[workout.currentExerciseIndex];
+  const selectedSet = selected?.sets[workout.currentSetIndex];
+  if (selected && !selected.skipped && selectedSet && !selectedSet.completed) return { exercise: selected, set: selectedSet };
+  for (let offset = 0; offset < workout.exercises.length; offset += 1) {
+    const exercise = workout.exercises[(workout.currentExerciseIndex + offset) % workout.exercises.length];
+    const set = !exercise.skipped ? exercise.sets.find((candidate) => !candidate.completed) : undefined;
+    if (set) return { exercise, set };
+  }
+  return null;
+}
+
 export function createWorkoutId(prefix: string): string {
   const uuid = globalThis.crypto?.randomUUID?.();
   if (uuid) return `${prefix}-${uuid}`;
@@ -118,6 +131,7 @@ export function startWorkoutFromPlan(
     id: createWorkoutId('workout'),
     planId: plan.id,
     planName: mode === 'express' ? `${plan.name} · Express` : plan.name,
+    trainingMode: mode,
     startedAt: now,
     updatedAt: now,
     currentExerciseIndex: 0,
@@ -134,6 +148,7 @@ export function startWorkoutFromPlan(
         ...(exercise.targetRirMin !== undefined ? { targetRirMin: exercise.targetRirMin } : {}),
         ...(exercise.targetRirMax !== undefined ? { targetRirMax: exercise.targetRirMax } : {}),
         ...(exercise.muscleGroup !== undefined ? { muscleGroup: exercise.muscleGroup } : {}),
+        ...(exercise.loadIncrementKg !== undefined ? { loadIncrementKg: exercise.loadIncrementKg } : {}),
         restSeconds: exercise.restSeconds,
         ...(exercise.notes ? { notes: exercise.notes } : {}),
         ...(exercise.supersetGroup ? { supersetGroup: exercise.supersetGroup } : {}),
@@ -288,6 +303,7 @@ export function completeActiveSet(
     : -1;
   if (exerciseIndex < 0 || setIndex < 0) throw new Error('Série não encontrada.');
 
+  if (workout.exercises[exerciseIndex].sets[setIndex].reps < 1) throw new Error('Informe pelo menos uma repetição antes de concluir a série, ou pule o exercício.');
   const now = nowDate.toISOString();
   const exercises = workout.exercises.map((exercise, index) => index !== exerciseIndex
     ? exercise
@@ -500,6 +516,7 @@ export function finishActiveWorkout(
     id: createWorkoutId('history'),
     planId: workout.planId,
     planName: workout.planName,
+    ...(workout.trainingMode ? { trainingMode: workout.trainingMode } : {}),
     startedAt: workout.startedAt,
     finishedAt,
     durationSeconds: Number.isFinite(startedAtMs)
@@ -509,6 +526,7 @@ export function finishActiveWorkout(
       .map((exercise) => ({
         exerciseId: exercise.exerciseId,
         exerciseName: exercise.exerciseName,
+        ...(exercise.muscleGroup ? { muscleGroup: exercise.muscleGroup } : {}),
         sets: exercise.sets
           .filter((set) => set.completed)
           .map((set) => ({

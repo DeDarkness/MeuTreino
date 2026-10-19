@@ -19,12 +19,14 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { useNumericDraft } from '../hooks/useNumericDraft';
+import { useWorkoutClock } from '../hooks/useWorkoutClock';
+import { getRestTarget } from '../lib/workout';
 import { fromStoredWeight, toStoredWeight } from '../lib/format';
 import { type RestNotificationPermission } from '../lib/notifications';
-import { getLoadSuggestion, getPotentialRecordLabels } from '../lib/progress';
+import { getProgressionAdvice, getPotentialRecordLabels } from '../lib/progress';
 import { primeRestAlertAudio } from '../lib/restAlert';
 import type {
   ActiveWorkout,
@@ -80,7 +82,8 @@ export function ActiveWorkoutScreen({
   notificationPermission,
   pushRestMessage,
 }: ActiveWorkoutScreenProps) {
-  const now = useCurrentTime();
+  const now = useWorkoutClock();
+  const restTarget = getRestTarget(workout);
   const currentCardRef = useRef<HTMLElement | null>(null);
   const [openTool, setOpenTool] = useState<'warmup' | 'plates' | null>(null);
 
@@ -112,10 +115,11 @@ export function ActiveWorkoutScreen({
     () => findPreviousSet(history, exercise?.exerciseId, exercise?.exerciseName, currentSet?.setNumber),
     [currentSet?.setNumber, exercise?.exerciseId, exercise?.exerciseName, history],
   );
-  const loadSuggestion = useMemo(
-    () => exercise ? getLoadSuggestion(history, exercise, preferences.weightUnit) : null,
+  const progressionAdvice = useMemo(
+    () => exercise ? getProgressionAdvice(history, exercise, preferences.weightUnit) : null,
     [exercise, history, preferences.weightUnit],
   );
+  const loadSuggestion = progressionAdvice?.suggestion;
   const recordLabels = useMemo(
     () => exercise && currentSet ? getPotentialRecordLabels(history, exercise, currentSet) : [],
     [currentSet, exercise, history],
@@ -132,7 +136,8 @@ export function ActiveWorkoutScreen({
 
   const selectSet = (nextExerciseIndex: number, nextSetIndex: number) => {
     onSelectSet(nextExerciseIndex, nextSetIndex);
-    window.requestAnimationFrame(() => currentCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    const reduced = preferences.reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.requestAnimationFrame(() => currentCardRef.current?.scrollIntoView({ behavior: reduced ? 'instant' : 'smooth', block: 'start' }));
   };
 
   if (!exercise || !currentSet) {
@@ -185,9 +190,9 @@ export function ActiveWorkoutScreen({
       {isResting ? (
         <RestPanel
           remainingSeconds={remainingRestSeconds}
-          nextExerciseName={exercise.exerciseName}
-          nextSetNumber={currentSet.setNumber}
-          totalSets={exercise.sets.length}
+          nextExerciseName={restTarget?.exercise.exerciseName ?? 'Treino registrado'}
+          nextSetNumber={restTarget?.set.setNumber ?? currentSet.setNumber}
+          totalSets={restTarget?.exercise.sets.length ?? exercise.sets.length}
           alertSound={preferences.restAlertSound}
           onAddRest={() => onAddRest(15)}
           onSkipRest={skipRest}
@@ -239,7 +244,7 @@ export function ActiveWorkoutScreen({
             <div className="active-workout__suggestion-copy">
               <span>PROGRESSÃO SUGERIDA</span>
               <strong>{formatWeight(fromStoredWeight(loadSuggestion.suggestedWeight, preferences.weightUnit) ?? 0)} {preferences.weightUnit}</strong>
-              <small>Você atingiu {loadSuggestion.targetReps} reps em todas as séries do último treino.</small>
+              <small>{progressionAdvice?.message}</small>
             </div>
             <button
               type="button"
@@ -248,7 +253,7 @@ export function ActiveWorkoutScreen({
               Usar
             </button>
           </div>
-        ) : null}
+        ) : progressionAdvice ? <div className={`elite-advice elite-advice--${progressionAdvice.kind}`}><strong>{progressionAdvice.title}</strong><p>{progressionAdvice.message}</p></div> : null}
 
         {previousSet ? (
           <div className="active-workout__last-hint">
@@ -274,7 +279,7 @@ export function ActiveWorkoutScreen({
           <SetControl
             label={`Carga (${preferences.weightUnit})`}
             value={fromStoredWeight(currentSet.weight, preferences.weightUnit) ?? 0}
-            step={0.5}
+            step={fromStoredWeight(exercise.loadIncrementKg ?? 0.5, preferences.weightUnit) ?? 0.5}
             min={0}
             inputMode="decimal"
             onChange={(value) => onUpdateSet(exerciseIndex, setIndex, { weight: toStoredWeight(value, preferences.weightUnit) })}
@@ -588,13 +593,13 @@ function RestPanel({
   onSkipRest: () => void;
 }) {
   return (
-    <aside className="active-workout__rest" role="status" aria-label="Tempo de descanso">
+    <aside className="active-workout__rest" aria-label="Tempo de descanso">
       <div className="active-workout__rest-glow" />
       <div className="active-workout__rest-content">
         <div className="active-workout__rest-top">
           <div className="active-workout__rest-icon"><BellRing aria-hidden="true" size={24} /></div>
           <div className="active-workout__rest-copy">
-            <span className="active-workout__rest-eyebrow">DESCANSO EM ANDAMENTO</span>
+            <span className="active-workout__rest-eyebrow" role="status">DESCANSO EM ANDAMENTO</span>
             <p className="active-workout__rest-message">Pode navegar e editar o treino.</p>
           </div>
           <time className="active-workout__rest-time" aria-label={`${remainingSeconds} segundos restantes`}>
@@ -619,29 +624,11 @@ function RestPanel({
         </div>
 
         <p className="active-workout__rest-notice">
-          Continue usando o MeuTreino normalmente. O aviso {alertSound === 'bell' ? 'de sino' : 'sonoro'} e a notificação serão disparados ao chegar a zero.
+          Com o app aberto, o toque {alertSound === 'bell' ? 'de sino' : 'sonoro'} segue seus ajustes. Para bloquear a tela, confira a confirmação do aviso em segundo plano acima.
         </p>
       </div>
     </aside>
   );
-}
-
-function useCurrentTime() {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const updateNow = () => setNow(Date.now());
-    const interval = window.setInterval(updateNow, 250);
-    document.addEventListener('visibilitychange', updateNow);
-    window.addEventListener('focus', updateNow);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', updateNow);
-      window.removeEventListener('focus', updateNow);
-    };
-  }, []);
-
-  return now;
 }
 
 function findPreviousSet(

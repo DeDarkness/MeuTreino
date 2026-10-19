@@ -1,9 +1,11 @@
 import { BellRing, Check, Database, Dumbbell, Download, LockKeyhole, Smartphone, Trash2, Upload, Volume2 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { PushNotificationSettings } from '../components/PushNotificationSettings';
 import type { PushStatus } from '../lib/pushNotifications';
 import { playRestAlert, primeRestAlertAudio } from '../lib/restAlert';
+import { readSafetySnapshot } from '../lib/database';
+import { formatDate } from '../lib/format';
 import type { Preferences } from '../types';
 
 type SettingsScreenProps = {
@@ -12,6 +14,7 @@ type SettingsScreenProps = {
   storagePersistent: boolean | null;
   onPreferencesChange: (patch: Partial<Preferences>) => void;
   onExport: () => Promise<void>;
+  onExportRecovery: () => Promise<void>;
   onImport: (file: File) => Promise<void>;
   onClear: () => Promise<void>;
   onInstallPreSurgicalProtocol: () => Promise<void>;
@@ -26,6 +29,7 @@ export function SettingsScreen({
   storagePersistent,
   onPreferencesChange,
   onExport,
+  onExportRecovery,
   onImport,
   onClear,
   onInstallPreSurgicalProtocol,
@@ -35,15 +39,20 @@ export function SettingsScreen({
 }: SettingsScreenProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [checkpoint, setCheckpoint] = useState<{ label: string; createdAt: string } | null>(null);
+  useEffect(() => { let active = true; void readSafetySnapshot().then((value) => { if (active) setCheckpoint(value ? { label: value.label, createdAt: value.createdAt } : null); }).catch(() => undefined); return () => { active = false; }; }, [message]);
   const vibrationSupported = typeof navigator !== 'undefined' && 'vibrate' in navigator;
 
   const run = async (action: () => Promise<void>, success: string) => {
+    if (busy) return;
+    setBusy(true);
     try {
       await action();
       setMessage(success);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Não foi possível concluir a ação.');
-    }
+    } finally { setBusy(false); }
   };
 
   return (
@@ -91,6 +100,7 @@ export function SettingsScreen({
       </SettingsGroup>
 
       <SettingsGroup title="Padrões do treino" icon={<Smartphone />}>
+        <ToggleRow label="Reduzir animações" description="Pausa o wallpaper em vídeo e reduz os movimentos da interface. Também respeita a preferência de acessibilidade do iPhone." checked={preferences.reduceMotion ?? false} onChange={(reduceMotion) => onPreferencesChange({ reduceMotion })} />
         <div className="setting-row stacked">
           <div><strong>Descanso padrão</strong><span>Usado ao adicionar um exercício.</span></div>
           <div className="rest-options" role="group" aria-label="Descanso padrão">
@@ -121,8 +131,10 @@ export function SettingsScreen({
 
       <SettingsGroup title="Dados neste iPhone" icon={<Database />}>
         <div className="privacy-box"><LockKeyhole /><div><strong>Treinos neste aparelho</strong><p>Treinos e histórico ficam somente aqui. Se você ativar os avisos em segundo plano, a Cloudflare recebe apenas a inscrição de notificações e os avisos agendados.</p></div></div>
-        <button className="setting-action" type="button" onClick={() => run(onExport, 'Backup exportado.')}><Download /> <span><strong>Exportar backup</strong><small>Salve uma cópia em JSON no app Arquivos.</small></span></button>
-        <button className="setting-action" type="button" onClick={() => fileInputRef.current?.click()}><Upload /> <span><strong>Importar backup</strong><small>Substitui os dados atuais por um backup válido.</small></span></button>
+        <button className="setting-action" type="button" disabled={busy} onClick={() => run(onExport, 'Backup exportado.')}><Download /> <span><strong>Exportar backup</strong><small>Salve uma cópia em JSON no app Arquivos. O wallpaper não é incluído.</small></span></button>
+        {checkpoint ? <button className="setting-action" type="button" disabled={busy} onClick={() => run(onExportRecovery, 'Cópia de segurança exportada. Use Importar backup se desejar restaurá-la.')}><Download /><span><strong>Exportar cópia de segurança anterior</strong><small>{checkpoint.label} · {formatDate(checkpoint.createdAt, true)}. Guardada antes de importar, excluir ou trocar fichas.</small></span></button> : null}
+        <p className="elite-caption elite-settings-caption">Uma cópia anterior é protegida automaticamente nas operações acima. Ela permanece somente neste aparelho e não substitui um backup no app Arquivos.</p>
+        <button className="setting-action" type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}><Upload /> <span><strong>Importar backup</strong><small>Valida o JSON antes de substituir os dados e preserva uma cópia anterior.</small></span></button>
         <input
           ref={fileInputRef}
           type="file"
@@ -144,11 +156,11 @@ export function SettingsScreen({
         ) : storagePersistent ? (
           <div className="persistence-ok"><Check size={17} /> Armazenamento persistente ativo</div>
         ) : null}
-        <button className="setting-action danger" type="button" onClick={() => {
+        <button className="setting-action danger" type="button" disabled={busy} onClick={() => {
           if (window.confirm('Apagar todos os treinos, histórico e ajustes deste iPhone? Esta ação não pode ser desfeita.')) {
             void run(onClear, 'Dados apagados.');
           }
-        }}><Trash2 /> <span><strong>Apagar todos os dados</strong><small>Remove treinos, histórico e sessão ativa.</small></span></button>
+        }}><Trash2 /> <span><strong>Apagar todos os dados</strong><small>Remove treinos, histórico, sessão ativa, wallpaper e a cópia de segurança local.</small></span></button>
       </SettingsGroup>
 
       <SettingsGroup title="Instalação" icon={<Smartphone />}>
@@ -164,7 +176,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino</strong><span>Versão 6.3.0 · PWA pessoal e offline</span></footer>
+      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 7.0.0 · seu treino, seus dados</span></footer>
     </section>
   );
 }

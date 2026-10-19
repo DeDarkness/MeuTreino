@@ -2,6 +2,9 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ActiveWorkoutDock } from './components/ActiveWorkoutDock';
+import { AppStatus } from './components/AppStatus';
+import { exportSafetySnapshot } from './lib/database';
+import { useReducedMotion } from './hooks/useReducedMotion';
 import { BottomNav, type AppTab } from './components/BottomNav';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { WallpaperBackdrop } from './components/WallpaperBackdrop';
@@ -25,6 +28,7 @@ type NavigatorWithStandalone = Navigator & { standalone?: boolean };
 
 export default function App() {
   const store = useWorkoutStore();
+  const reducedMotion = useReducedMotion(store.state?.preferences.reduceMotion);
   const pushStatus = usePushNotifications();
   const wallpaper = useWallpaper();
   const [activeTab, setActiveTab] = useState<AppTab>('home');
@@ -110,8 +114,7 @@ export default function App() {
 
   const openWorkout = async (plan: WorkoutPlan, mode: TrainingMode = 'complete') => {
     if (isStandalone && notificationPermission === 'default') {
-      try { await enablePushNotifications(); } catch { /* Notification failures must not prevent training. */ }
-      setNotificationPermission(getRestNotificationPermission());
+      void enablePushNotifications().catch(() => undefined).finally(() => setNotificationPermission(getRestNotificationPermission()));
     }
     if (state.activeWorkout) {
       if (state.activeWorkout.planId !== plan.id) return;
@@ -122,10 +125,10 @@ export default function App() {
     setShowActiveWorkout(true);
   };
 
-  const exportBackup = async () => {
-    const json = await store.exportData();
+  const exportBackup = async (recovery = false) => {
+    const json = recovery ? await exportSafetySnapshot() : await store.exportData();
     const date = new Date().toISOString().slice(0, 10);
-    const file = new File([json], `meutreino-backup-${date}.json`, { type: 'application/json' });
+    const file = new File([json], `meutreino-${recovery ? 'recuperacao' : 'backup'}-${date}.json`, { type: 'application/json' });
     const shareNavigator = navigator as Navigator & {
       canShare?: (data: ShareData) => boolean;
       share?: (data: ShareData) => Promise<void>;
@@ -159,8 +162,9 @@ export default function App() {
 
   if (showActiveWorkout && activeWorkout) {
     return (
-      <div className={`app-shell active-mode${wallpaper.asset ? ' has-wallpaper' : ''}`}>
-        <WallpaperBackdrop asset={wallpaper.asset} url={wallpaper.url} />
+      <div className={`app-shell active-mode${wallpaper.asset ? ' has-wallpaper' : ''}`} data-reduced-motion={reducedMotion}>
+        <WallpaperBackdrop asset={wallpaper.asset} url={wallpaper.url} reducedMotion={reducedMotion} />
+        <AppStatus saving={store.saving} hasError={Boolean(store.error)} />
         {store.error ? (
           <div className="global-error active-error" role="alert">
             <AlertTriangle size={18} />
@@ -241,14 +245,15 @@ export default function App() {
             setShowActiveWorkout(false);
           }}
         />
-        <UpdatePrompt />
+        <UpdatePrompt workoutInProgress />
       </div>
     );
   }
 
   return (
-    <div className={`app-shell${wallpaper.asset ? ' has-wallpaper' : ''}${activeWorkout ? ' has-active-workout' : ''}`}>
-      <WallpaperBackdrop asset={wallpaper.asset} url={wallpaper.url} />
+    <div className={`app-shell${wallpaper.asset ? ' has-wallpaper' : ''}${activeWorkout ? ' has-active-workout' : ''}`} data-reduced-motion={reducedMotion}>
+      <WallpaperBackdrop asset={wallpaper.asset} url={wallpaper.url} reducedMotion={reducedMotion} />
+      <AppStatus saving={store.saving} hasError={Boolean(store.error)} />
       <main className="app-content">
         {store.error ? (
           <div className="global-error" role="alert">
@@ -264,6 +269,8 @@ export default function App() {
             history={state.history}
             activeWorkout={activeWorkout}
             showInstallPrompt={showIosInstallPrompt}
+            weeklyPlanModes={state.preferences.weeklyPlanModes}
+            onModesChange={(weeklyPlanModes) => runAction(store.updatePreferences({ weeklyPlanModes }))}
             onStart={(plan, mode) => runAction(openWorkout(plan, mode))}
             onContinue={() => setShowActiveWorkout(true)}
             onGoPlans={() => setActiveTab('plans')}
@@ -276,8 +283,11 @@ export default function App() {
             plans={state.plans}
             activeWorkout={activeWorkout}
             defaultRestSeconds={state.preferences.defaultRestSeconds}
+            history={state.history}
+            weeklyPlanModes={state.preferences.weeklyPlanModes}
+            onModesChange={(weeklyPlanModes) => runAction(store.updatePreferences({ weeklyPlanModes }))}
             onStart={(plan, mode) => runAction(openWorkout(plan, mode))}
-            onSave={(plan) => runAction(store.savePlan(plan))}
+            onSave={store.savePlan}
             onDelete={(id) => runAction(store.deletePlan(id))}
             onDuplicate={(id) => runAction(store.duplicatePlan(id))}
           />
@@ -309,9 +319,10 @@ export default function App() {
             isStandalone={isStandalone}
             storagePersistent={storagePersistent}
             onPreferencesChange={(patch) => runAction(store.updatePreferences(patch))}
-            onExport={exportBackup}
+            onExport={() => exportBackup()}
+            onExportRecovery={() => exportBackup(true)}
             onInstallPreSurgicalProtocol={store.installPreSurgicalProtocol}
-            onImport={async (file) => { await store.importData(await file.text()); }}
+            onImport={async (file) => { if (file.size > 25 * 1024 * 1024) throw new Error('Use um backup JSON de até 25 MB.'); await store.importData(await file.text()); }}
             onClear={async () => {
               await Promise.all([store.clearData(), wallpaper.remove()]);
               setActiveTab('home');
@@ -342,7 +353,7 @@ export default function App() {
           onViewProgress={() => { setCompletedSummary(null); setActiveTab('history'); }}
         />
       ) : null}
-      <UpdatePrompt />
+      <UpdatePrompt workoutInProgress={Boolean(activeWorkout)} />
     </div>
   );
 }

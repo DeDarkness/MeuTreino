@@ -1,5 +1,6 @@
 import type { ActiveWorkout } from '../types';
 import { PUSH_SERVICE_URL } from './pushConfig';
+import { getRestTarget } from './workout';
 
 interface PushConnection {
   deviceId: string;
@@ -265,8 +266,9 @@ export async function enablePushNotifications(): Promise<void> {
 
 export function getPushRest(workout: ActiveWorkout | null, soundEnabled: boolean, now = Date.now()): PushRest | null {
   if (!workout?.restEndsAt || Date.parse(workout.restEndsAt) <= now || !Number.isFinite(Date.parse(workout.restEndsAt))) return null;
-  const exercise = workout.exercises[workout.currentExerciseIndex];
-  const set = exercise?.sets[workout.currentSetIndex];
+  const target = getRestTarget(workout);
+  const exercise = target?.exercise;
+  const set = target?.set;
   return {
     id: `${workout.id}/${workout.restEndsAt}`, endsAt: workout.restEndsAt,
     body: `Próxima: ${exercise?.exerciseName ?? 'próxima série'} · Série ${set?.setNumber ?? 1}`.slice(0, 240),

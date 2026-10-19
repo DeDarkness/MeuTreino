@@ -1,7 +1,9 @@
 import { Dumbbell, Plus, SkipForward, Timer } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import type { ActiveWorkout } from '../types';
+import { getRestTarget } from '../lib/workout';
+import { useWorkoutClock } from '../hooks/useWorkoutClock';
 
 type ActiveWorkoutDockProps = {
   workout: ActiveWorkout;
@@ -12,12 +14,13 @@ type ActiveWorkoutDockProps = {
 };
 
 export function ActiveWorkoutDock({ workout, onOpen, onAddRest, onSkipRest, pushRestMessage }: ActiveWorkoutDockProps) {
-  const now = useCurrentTime();
+  const now = useWorkoutClock();
   const restEndMs = workout.restEndsAt ? Date.parse(workout.restEndsAt) : null;
   const isResting = restEndMs !== null && Number.isFinite(restEndMs) && restEndMs > now;
   const remainingSeconds = isResting ? Math.max(0, Math.ceil((restEndMs - now) / 1000)) : 0;
-  const exercise = workout.exercises[workout.currentExerciseIndex];
-  const set = exercise?.sets[workout.currentSetIndex];
+  const target = getRestTarget(workout);
+  const exercise = target?.exercise;
+  const set = target?.set;
   const { completed, total } = useMemo(() => ({
     completed: workout.exercises.reduce((sum, item) => sum + (item.skipped ? 0 : item.sets.filter((candidate) => candidate.completed).length), 0),
     total: workout.exercises.reduce((sum, item) => sum + (item.skipped ? 0 : item.sets.length), 0),
@@ -41,20 +44,6 @@ export function ActiveWorkoutDock({ workout, onOpen, onAddRest, onSkipRest, push
       ) : null}
     </aside>
   );
-}
-
-function useCurrentTime() {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const update = () => setNow(Date.now());
-    const interval = window.setInterval(update, 250);
-    document.addEventListener('visibilitychange', update);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', update);
-    };
-  }, []);
-  return now;
 }
 
 function formatRestClock(totalSeconds: number) {

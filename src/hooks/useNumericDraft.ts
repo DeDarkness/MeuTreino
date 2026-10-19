@@ -26,7 +26,8 @@ export function useNumericDraft({
     if (!editingRef.current) setDraft(String(value));
   }, [value]);
 
-  const normalize = (next: number) => normalizeNumericValue(next, { min, max, step, integer });
+  // A step controls +/- buttons, not which decimal loads the user may type.
+  const normalize = (next: number) => normalizeNumericValue(next, { min, max, step: integer ? 1 : 0.01, integer });
   const parsedDraft = () => parseNumericDraft(draft, !integer);
 
   const updateDraft = (nextDraft: string) => {

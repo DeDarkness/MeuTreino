@@ -1,7 +1,10 @@
 import { RefreshCw, WifiOff } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useEffect, useRef } from 'react';
 
-export function UpdatePrompt() {
+export function UpdatePrompt({ workoutInProgress = false }: { workoutInProgress?: boolean }) {
+  const interval = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearInterval(interval.current), []);
   const {
     offlineReady: [offlineReady, setOfflineReady],
     needRefresh: [needRefresh, setNeedRefresh],
@@ -9,7 +12,8 @@ export function UpdatePrompt() {
   } = useRegisterSW({
     onRegisteredSW(_url, registration) {
       if (!registration) return;
-      window.setInterval(() => void registration.update(), 60 * 60 * 1000);
+      window.clearInterval(interval.current);
+      interval.current = window.setInterval(() => { void registration.update().catch(() => undefined); }, 60 * 60 * 1000);
     },
   });
 
@@ -20,10 +24,10 @@ export function UpdatePrompt() {
       {needRefresh ? <RefreshCw size={19} /> : <WifiOff size={19} />}
       <div>
         <strong>{needRefresh ? 'Atualização disponível' : 'Pronto para usar offline'}</strong>
-        <span>{needRefresh ? 'Recarregue para usar a nova versão.' : 'O MeuTreino foi salvo neste iPhone.'}</span>
+        <span>{needRefresh ? workoutInProgress ? 'Sua sessão está protegida. Termine o treino para atualizar.' : 'Recarregue para usar a nova versão. Seus registros serão preservados.' : 'O MeuTreino foi salvo neste iPhone.'}</span>
       </div>
       {needRefresh ? (
-        <button type="button" onClick={() => void updateServiceWorker(true)}>Atualizar</button>
+        <button type="button" disabled={workoutInProgress} onClick={() => void updateServiceWorker(true)}>Atualizar</button>
       ) : (
         <button type="button" aria-label="Fechar" onClick={() => setOfflineReady(false)}>×</button>
       )}

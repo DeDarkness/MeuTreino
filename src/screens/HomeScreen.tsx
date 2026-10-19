@@ -1,7 +1,5 @@
 import {
   ArrowRight,
-  CalendarDays,
-  CheckCircle2,
   Dumbbell,
   Flame,
   Play,
@@ -10,16 +8,19 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import { formatDate, formatDuration, greeting, todayLabel } from '../lib/format';
+import { formatDate, greeting, todayLabel } from '../lib/format';
+import { WeeklyDashboard } from '../components/WeeklyDashboard';
 import { getSuggestedPlanId } from '../lib/starterPlans';
 import { canUseExpress, getModeExercises, plannedSets, type TrainingMode } from '../lib/trainingModes';
-import type { ActiveWorkout, Exercise, WorkoutHistory, WorkoutPlan } from '../types';
+import type { ActiveWorkout, Exercise, WorkoutHistory, WorkoutPlan, Preferences } from '../types';
 
 type HomeScreenProps = {
   plans: WorkoutPlan[];
   history: WorkoutHistory[];
   activeWorkout: ActiveWorkout | null;
   showInstallPrompt: boolean;
+  weeklyPlanModes: Preferences['weeklyPlanModes'];
+  onModesChange: (modes: Record<string, TrainingMode>) => void;
   onStart: (plan: WorkoutPlan, mode?: TrainingMode) => void;
   onContinue: () => void;
   onGoPlans: () => void;
@@ -37,13 +38,14 @@ export function HomeScreen({
   history,
   activeWorkout,
   showInstallPrompt,
+  weeklyPlanModes,
+  onModesChange,
   onStart,
   onContinue,
   onGoPlans,
   onGoHistory,
 }: HomeScreenProps) {
   const todayPlanId = getSuggestedPlanId();
-  const [trainingMode, setTrainingMode] = useState<TrainingMode>('complete');
   const [selectedPlanId, setSelectedPlanId] = useState(() =>
     plans.some((plan) => plan.id === todayPlanId) ? todayPlanId : (plans[0]?.id ?? ''),
   );
@@ -59,12 +61,10 @@ export function HomeScreen({
   const selectedDay = WORKOUT_DAYS.find((day) => day.planId === selectedPlan?.id);
   const availableDays = WORKOUT_DAYS.filter((day) => plans.some((plan) => plan.id === day.planId));
   const expressAvailable = selectedPlan ? canUseExpress(selectedPlan) : false;
-  const selectedMode = activeWorkout ? 'complete' : expressAvailable ? trainingMode : 'complete';
+  const selectedMode = expressAvailable ? activeWorkout?.planId === selectedPlan?.id
+    ? activeWorkout.trainingMode ?? (activeWorkout.planName.endsWith(' · Express') ? 'express' : 'complete')
+    : weeklyPlanModes?.[selectedPlan!.id] ?? 'complete' : 'complete';
   const selectedSets = selectedPlan ? plannedSets(selectedPlan, selectedMode) : 0;
-  const weekStart = new Date();
-  weekStart.setHours(0, 0, 0, 0);
-  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
-  const thisWeek = history.filter((item) => Date.parse(item.finishedAt) >= weekStart.getTime());
   const completed = activeWorkout?.exercises.reduce(
     (total, item) => total + (item.skipped ? 0 : item.sets.filter((set) => set.completed).length),
     0,
@@ -77,6 +77,7 @@ export function HomeScreen({
     <section className="screen home-screen home-screen--premium" aria-labelledby="home-title">
       <header className="screen-heading home-heading">
         <div>
+          <span className="elite-release-badge">MEUTREINO <b>ELITE 7</b></span>
           <p className="eyebrow">{todayLabel()}</p>
           <h1 id="home-title">{greeting()} 👋</h1>
           <p>Qual treino vamos encarar hoje?</p>
@@ -132,12 +133,12 @@ export function HomeScreen({
         <article className="hero-card workout-hero day-workout-hero" id="selected-workout" role="tabpanel" key={selectedPlan.id}>
           <div className="hero-icon hero-icon--pulse"><Dumbbell size={29} /></div>
           <p className="eyebrow">{selectedDay?.label ?? 'Treino escolhido'}</p>
-          <h2>{selectedPlan.notes || selectedPlan.name}</h2>
-          <p className="day-workout-hero__name">{selectedPlan.name}</p>
+          <h2>{selectedPlan.name}</h2>
+          <p className="day-workout-hero__name">{selectedPlan.notes || 'Seu próximo passo começa aqui.'}</p>
           {expressAvailable && !activeWorkout ? (
             <div className="elite-mode-picker" role="group" aria-label="Duração do treino">
-              <button type="button" className={selectedMode === 'complete' ? 'is-selected' : ''} aria-pressed={selectedMode === 'complete'} onClick={() => setTrainingMode('complete')}>Completo · 75–90 min</button>
-              <button type="button" className={selectedMode === 'express' ? 'is-selected' : ''} aria-pressed={selectedMode === 'express'} onClick={() => setTrainingMode('express')}>Express · ~50–60 min</button>
+              <button type="button" className={selectedMode === 'complete' ? 'is-selected' : ''} aria-pressed={selectedMode === 'complete'} onClick={() => onModesChange({ ...weeklyPlanModes, [selectedPlan.id]: 'complete' })}>Completo · {plannedSets(selectedPlan)} séries</button>
+              <button type="button" className={selectedMode === 'express' ? 'is-selected' : ''} aria-pressed={selectedMode === 'express'} onClick={() => onModesChange({ ...weeklyPlanModes, [selectedPlan.id]: 'express' })}>Express · {plannedSets(selectedPlan, 'express')} séries</button>
             </div>
           ) : null}
           <div className="hero-meta">
@@ -179,15 +180,11 @@ export function HomeScreen({
         </article>
       )}
 
-      <div className="section-title-row"><h2>Seu ritmo</h2></div>
-      <div className="stat-grid">
-        <article className="stat-card stat-card--alive"><div className="stat-icon"><CalendarDays /></div><strong>{thisWeek.length}</strong><span>treinos nesta semana</span></article>
-        <article className="stat-card stat-card--alive"><div className="stat-icon"><CheckCircle2 /></div><strong>{lastWorkout ? formatDuration(lastWorkout.durationSeconds) : '—'}</strong><span>{lastWorkout ? `último: ${formatDate(lastWorkout.finishedAt)}` : 'seu histórico começa aqui'}</span></article>
-      </div>
+      <WeeklyDashboard plans={plans} history={history} modes={weeklyPlanModes} onModesChange={onModesChange} />
 
       {lastWorkout ? (
         <button className="last-workout-card interactive-card" type="button" onClick={onGoHistory}>
-          <div><span>Último treino</span><strong>{lastWorkout.planName}</strong></div><ArrowRight size={21} />
+          <div><span>Último treino · {formatDate(lastWorkout.finishedAt)}</span><strong>{lastWorkout.planName}</strong></div><ArrowRight size={21} />
         </button>
       ) : null}
 

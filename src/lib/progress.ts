@@ -32,6 +32,17 @@ export type LoadSuggestion = {
   increment: number;
   targetReps: number;
   basedOn: string;
+  percentage: number;
+};
+
+type ProgressionExercise = (Pick<Exercise, 'id' | 'name' | 'targetSets' | 'targetReps'>
+  & Partial<Pick<Exercise, 'notes' | 'targetRirMin' | 'targetRirMax' | 'loadIncrementKg'>>) | ActiveWorkoutExercise;
+
+export type ProgressionAdvice = {
+  kind: 'start' | 'maintain' | 'record-rir' | 'adjust-step' | 'increase';
+  title: string;
+  message: string;
+  suggestion: LoadSuggestion | null;
 };
 
 export function buildExerciseProgress(history: WorkoutHistory[]): ExerciseProgress[] {
@@ -44,9 +55,8 @@ export function buildExerciseProgress(history: WorkoutHistory[]): ExerciseProgre
       const key = normalized(exercise.exerciseName);
       const weightedSets = exercise.sets.filter((set) => set.weight !== null && set.weight > 0);
       const maxWeight = weightedSets.length ? Math.max(...weightedSets.map((set) => set.weight!)) : null;
-      const estimated = weightedSets.length
-        ? Math.max(...weightedSets.map((set) => estimateOneRepMax(set.weight!, set.reps)))
-        : null;
+      const estimates = weightedSets.map((set) => estimateOneRepMax(set.weight!, set.reps)).filter((value): value is number => value !== null);
+      const estimated = estimates.length ? Math.max(...estimates) : null;
       const session: ExerciseSessionMetric = {
         workoutId: workout.id,
         finishedAt: workout.finishedAt,
@@ -79,9 +89,14 @@ export function buildExerciseProgress(history: WorkoutHistory[]): ExerciseProgre
 
 export function getLoadSuggestion(
   history: WorkoutHistory[],
-  exercise: Pick<Exercise, 'id' | 'name' | 'targetSets' | 'targetReps' | 'notes'> | ActiveWorkoutExercise,
+  exercise: ProgressionExercise,
   unit: WeightUnit,
 ): LoadSuggestion | null {
+  return getProgressionAdvice(history, exercise, unit).suggestion;
+}
+
+export function getProgressionAdvice(history: WorkoutHistory[], exercise: ProgressionExercise, unit: WeightUnit): ProgressionAdvice {
+  const advice = (kind: ProgressionAdvice['kind'], title: string, message: string): ProgressionAdvice => ({ kind, title, message, suggestion: null });
   const targetSets = 'targetSets' in exercise ? exercise.targetSets : exercise.sets.length;
   const targetReps = 'targetReps' in exercise
     ? exercise.targetReps
@@ -91,23 +106,41 @@ export function getLoadSuggestion(
     .map((workout) => ({
       workout,
       exercise: workout.exercises.find((candidate) =>
-        candidate.exerciseId === ('id' in exercise ? exercise.id : exercise.exerciseId)
-        || normalized(candidate.exerciseName) === normalized('name' in exercise ? exercise.name : exercise.exerciseName)),
+        normalized(candidate.exerciseName) === normalized('name' in exercise ? exercise.name : exercise.exerciseName)),
     }))
     .find((candidate) => candidate.exercise)?.exercise;
 
-  if (!latest || latest.sets.length < targetSets) return null;
-  if (!latest.sets.every((set) => set.reps >= targetReps && set.weight !== null && set.weight > 0)) return null;
+  if (!latest) return advice('start', 'Construa sua referência', 'Registre carga, repetições e RIR. Nenhuma carga é aumentada automaticamente.');
+  if (latest.sets.length < targetSets) return advice('maintain', 'Complete a referência', 'A última sessão teve menos séries que a meta atual. Registre uma sessão com a quantidade planejada antes de progredir.');
+  if (!latest.sets.every((set) => set.reps >= targetReps && set.weight !== null && set.weight > 0)) {
+    return advice('maintain', 'Consolide a carga atual', `Busque ${targetReps} repetições em todas as séries, com técnica estável e respeitando o RIR alvo.`);
+  }
+  if (latest.sets.some((set) => set.rir === null || set.rir === undefined)) {
+    return advice('record-rir', 'Falta registrar o esforço', 'O topo das repetições foi atingido, mas falta RIR em alguma série. Sem esse dado, o app não recomenda aumentar a carga.');
+  }
+  const minimumRir = exercise.targetRirMin ?? 2;
+  if (latest.sets.some((set) => set.rir! < minimumRir)) {
+    return advice('maintain', 'Mantenha a carga por enquanto', `Alguma série ficou abaixo do RIR ${minimumRir}. Consolide as repetições com mais reserva antes de subir.`);
+  }
 
   const currentWeight = Math.min(...latest.sets.map((set) => set.weight!));
-  const increment = unit === 'lb' ? 5 / 2.2046226218 : 2.5;
-  return {
+  if (latest.sets.some((set) => Math.abs(set.weight! - currentWeight) > 0.01)) {
+    return advice('maintain', 'Compare séries equivalentes', 'A última sessão teve cargas diferentes entre séries. Ajuste cada série manualmente; não há aumento único confiável.');
+  }
+  const steps = unit === 'lb' ? [0.5, 1, 2.5, 5, 10].map((step) => step / 2.2046226218) : [0.25, 0.5, 1, 1.25, 2.5, 5];
+  const increment = exercise.loadIncrementKg ?? steps.filter((step) => step <= currentWeight * 0.05 + 0.00001).at(-1);
+  if (!increment || increment <= 0 || increment > currentWeight * 0.05 + 0.00001) {
+    return advice('adjust-step', 'O incremento precisa ser menor', 'O próximo incremento ultrapassa 5% da carga. Configure um passo menor na ficha, se o equipamento permitir, ou mantenha a carga.');
+  }
+  const suggestion: LoadSuggestion = {
     currentWeight,
     suggestedWeight: roundStoredWeight(currentWeight + increment),
     increment: roundStoredWeight(increment),
     targetReps,
     basedOn: latest.exerciseName,
+    percentage: Math.round(increment / currentWeight * 1000) / 10,
   };
+  return { kind: 'increase', title: 'Pronto para um pequeno avanço', message: `Repetições e RIR conferidos. Sugestão de +${suggestion.percentage}%: confirme o equipamento e a execução antes de aplicar.`, suggestion };
 }
 
 export function getPotentialRecordLabels(
@@ -129,14 +162,16 @@ export function getPotentialRecordLabels(
     if (previousWeighted.length > 0) {
       const previousMaxWeight = Math.max(...previousWeighted.map((candidate) => candidate.weight!));
       if (set.weight > previousMaxWeight) labels.unshift('Maior carga');
-      const previousStrength = Math.max(...previousWeighted.map((candidate) => estimateOneRepMax(candidate.weight!, candidate.reps)));
-      if (estimateOneRepMax(set.weight, set.reps) > previousStrength && !labels.includes('Maior carga')) labels.push('Recorde de força');
+      const estimates = previousWeighted.map((candidate) => estimateOneRepMax(candidate.weight!, candidate.reps)).filter((value): value is number => value !== null);
+      const estimate = estimateOneRepMax(set.weight, set.reps);
+      if (estimate !== null && estimates.length && estimate > Math.max(...estimates) && !labels.includes('Maior carga')) labels.push('Recorde de força estimada');
     }
   }
   return labels;
 }
 
 export function estimateOneRepMax(weight: number, reps: number) {
+  if (!Number.isFinite(weight) || weight <= 0 || !Number.isInteger(reps) || reps < 1 || reps > 12) return null;
   return weight * (1 + Math.max(0, reps) / 30);
 }
 

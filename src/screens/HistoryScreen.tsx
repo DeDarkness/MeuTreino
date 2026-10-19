@@ -12,11 +12,13 @@ import {
   TrendingUp,
   Trophy,
   Zap,
+  Search,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { formatDate, formatDuration, formatWeight } from '../lib/format';
 import { buildExerciseProgress, getLoadSuggestion, type ExerciseProgress } from '../lib/progress';
+import { searchText } from '../lib/weeklyInsights';
 import type { WeightUnit, WorkoutHistory, WorkoutPlan } from '../types';
 
 type HistoryScreenProps = {
@@ -32,7 +34,7 @@ export function HistoryScreen({ history, plans, weightUnit, onDelete }: HistoryS
   const progress = useMemo(() => buildExerciseProgress(history), [history]);
   const selectedProgress = progress.find((item) => item.key === selectedExerciseKey) ?? progress[0] ?? null;
   const suggestions = useMemo(
-    () => plans.flatMap((plan) => plan.exercises.map((exercise) => {
+    () => plans.filter((plan) => !plan.id.startsWith('plan-arquivo-')).flatMap((plan) => plan.exercises.map((exercise) => {
       const suggestion = getLoadSuggestion(history, exercise, weightUnit);
       return suggestion ? { planName: plan.name, exercise, suggestion } : null;
     })).filter((item): item is NonNullable<typeof item> => item !== null),
@@ -110,7 +112,7 @@ export function HistoryScreen({ history, plans, weightUnit, onDelete }: HistoryS
               <div className="load-suggestions__heading">
                 <div>
                   <h2 id="load-suggestions-title">Próximas cargas</h2>
-                  <p>Ao atingir o topo das repetições em todas as séries, o app sugere o próximo passo.</p>
+                  <p>Repetições, RIR e incremento conferidos. A decisão de aplicar a sugestão continua sua.</p>
                 </div>
               </div>
               {suggestions.length ? (
@@ -132,7 +134,7 @@ export function HistoryScreen({ history, plans, weightUnit, onDelete }: HistoryS
               ) : (
                 <div className="progression-empty">
                   <Award aria-hidden="true" />
-                  <div><strong>Continue progredindo</strong><span>As sugestões aparecem após você atingir o máximo da faixa de repetições.</span></div>
+                  <div><strong>Progrida com critério</strong><span>Registre o RIR de todas as séries. As sugestões exigem o topo da faixa, reserva adequada e um incremento de até 5%.</span></div>
                 </div>
               )}
             </section>
@@ -202,6 +204,7 @@ function ExerciseEvolution({
         <Record icon={<Zap />} label="Força estimada" value={formatWeight(selected.bestEstimatedOneRepMax, weightUnit)} />
         <Record icon={<TrendingUp />} label="Melhor volume" value={formatWeight(selected.bestVolume || null, weightUnit)} />
       </div>
+      <p className="elite-caption">Força estimada não é um teste de carga máxima. Calculada apenas em séries de 1 a 12 repetições; resultados de equipamentos diferentes não são diretamente comparáveis.</p>
     </section>
   );
 }
@@ -299,10 +302,20 @@ function TrainingCalendar({ history }: { history: WorkoutHistory[] }) {
 
 function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps, 'plans'>) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const sorted = [...history].sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt));
+  const [query, setQuery] = useState('');
+  const [period, setPeriod] = useState('all');
+  const since = new Date();
+  since.setDate(since.getDate() - Number(period === 'all' ? 0 : period));
+  const sorted = history.filter((item) => (period === 'all' || Date.parse(item.finishedAt) >= since.getTime())
+    && searchText(`${item.planName} ${item.notes ?? ''} ${item.exercises.map((exercise) => exercise.exerciseName).join(' ')}`).includes(searchText(query)))
+    .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt));
 
   return (
     <div className="history-list">
+      <label className="elite-search"><Search size={18} aria-hidden="true" /><input type="search" aria-label="Buscar no histórico" placeholder="Treino, exercício ou anotação…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <label className="elite-period">Período<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="all">Todo o histórico</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></label>
+      <p className="elite-caption">{sorted.length} {sorted.length === 1 ? 'sessão encontrada' : 'sessões encontradas'}</p>
+      {!sorted.length ? <div className="elite-empty-search">Nenhum registro corresponde à busca. Seu histórico não foi apagado.</div> : null}
       {sorted.map((item) => {
         const open = item.id === expandedId;
         const itemSets = item.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);

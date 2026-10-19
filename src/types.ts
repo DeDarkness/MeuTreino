@@ -18,6 +18,8 @@ export interface Exercise {
   targetRirMax?: number;
   /** Dominant direct muscle target for volume accounting; compound overlaps excluded. */
   muscleGroup?: MuscleGroup;
+  /** Smallest available load increment, always stored in kg. */
+  loadIncrementKg?: number;
   restSeconds: number;
   notes?: string;
   /** Exercises sharing the same label alternate set-by-set during the workout. */
@@ -47,6 +49,8 @@ export interface WorkoutSetHistory {
 export interface WorkoutExerciseHistory {
   exerciseId: string;
   exerciseName: string;
+  /** Snapshot: future plan edits must not rewrite completed muscle volume. */
+  muscleGroup?: MuscleGroup;
   sets: WorkoutSetHistory[];
 }
 
@@ -59,6 +63,7 @@ export interface WorkoutHistory {
   durationSeconds: number;
   exercises: WorkoutExerciseHistory[];
   notes?: string;
+  trainingMode?: 'complete' | 'express';
 }
 
 export interface ActiveWorkoutSet {
@@ -80,6 +85,7 @@ export interface ActiveWorkoutExercise {
   targetRirMin?: number;
   targetRirMax?: number;
   muscleGroup?: MuscleGroup;
+  loadIncrementKg?: number;
   restSeconds: number;
   notes?: string;
   supersetGroup?: string;
@@ -104,6 +110,7 @@ export interface ActiveWorkout {
   restDurationSeconds: number | null;
   exercises: ActiveWorkoutExercise[];
   notes?: string;
+  trainingMode?: 'complete' | 'express';
 }
 
 export interface Preferences {
@@ -112,6 +119,8 @@ export interface Preferences {
   vibrationEnabled: boolean;
   restAlertSound: 'bell' | 'beep';
   weightUnit: WeightUnit;
+  weeklyPlanModes?: Record<string, 'complete' | 'express'>;
+  reduceMotion?: boolean;
 }
 
 export interface AppState {
