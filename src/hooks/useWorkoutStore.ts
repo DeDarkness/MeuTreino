@@ -120,7 +120,7 @@ export function useWorkoutStore(): WorkoutStore {
     }).finally(() => { pendingWrites.current -= 1; if (mountedRef.current && pendingWrites.current === 0) setSaving(false); });
   }, []);
 
-  const commit = useCallback(async <T,>(change: (current: AppState) => { state: AppState; result: T }, checkpointLabel?: string): Promise<T> => {
+  const commit = useCallback(async <T,>(change: (current: AppState) => { state: AppState; result: T; checkpointLabel?: string }, checkpointLabel?: string): Promise<T> => {
     if (importingRef.current) {
       const message = 'Aguarde a importação do backup terminar.';
       if (mountedRef.current) setError(message);
@@ -131,7 +131,7 @@ export function useWorkoutStore(): WorkoutStore {
 
     // Compute first and update the ref synchronously. IndexedDB is deliberately
     // enqueued afterwards, never from inside a React state updater.
-    let changed: { state: AppState; result: T };
+    let changed: { state: AppState; result: T; checkpointLabel?: string };
     try {
       changed = change(current);
       validateAppState(changed.state);
@@ -146,7 +146,7 @@ export function useWorkoutStore(): WorkoutStore {
       setState(changed.state);
       setError(null);
     }
-    await enqueueSave(changed.state, checkpointLabel);
+    await enqueueSave(changed.state, changed.checkpointLabel ?? checkpointLabel);
     return changed.result;
   }, [enqueueSave]);
 
@@ -207,14 +207,15 @@ export function useWorkoutStore(): WorkoutStore {
   const finishWorkout = useCallback(() =>
     commit((current) => {
       const changed = finishActiveWorkout(current);
-      return { state: upgradeEliteProtocol(changed.state), result: changed.history };
+      const upgraded = upgradeEliteProtocol(changed.state);
+      return { state: upgraded, result: changed.history, checkpointLabel: upgraded !== changed.state ? 'Antes da atualização das fichas' : undefined };
     }), [commit]);
 
-  const abandonWorkout = useCallback(() => commitState((current) => upgradeEliteProtocol({
-    ...current,
-    activeWorkout: null,
-    updatedAt: new Date().toISOString(),
-  })), [commitState]);
+  const abandonWorkout = useCallback(() => commit((current) => {
+    const next = { ...current, activeWorkout: null, updatedAt: new Date().toISOString() };
+    const upgraded = upgradeEliteProtocol(next);
+    return { state: upgraded, result: undefined, checkpointLabel: upgraded !== next ? 'Antes da atualização das fichas' : undefined };
+  }), [commit]);
 
   const deleteHistory = useCallback((historyId: string) => commitState((current) => ({
     ...current,

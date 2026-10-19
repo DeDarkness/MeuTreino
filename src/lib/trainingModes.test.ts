@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createSeedState, validateAppState } from './database';
-import { applyPreSurgicalProtocol, createWeeklyWorkoutPlans, upgradeEliteProtocol } from './starterPlans';
+import { applyPreSurgicalProtocol, createWeeklyWorkoutPlans, ELITE_PROTOCOL_VERSION, upgradeEliteProtocol } from './starterPlans';
 import { plannedSets, weeklyMuscleVolumes } from './trainingModes';
 import { startWorkoutFromPlan } from './workout';
 
@@ -57,11 +57,11 @@ describe('MeuTreino Elite: apenas treino normal e métricas', () => {
     const old = { ...seed, eliteProtocolVersion: undefined };
     const active = startWorkoutFromPlan(old, old.plans[0].id).state;
     expect(upgradeEliteProtocol(active)).toBe(active);
-    expect(upgradeEliteProtocol({ ...active, activeWorkout: null }).eliteProtocolVersion).toBe(1);
+    expect(upgradeEliteProtocol({ ...active, activeWorkout: null }).eliteProtocolVersion).toBe(ELITE_PROTOCOL_VERSION);
   });
 
   it('rejeita versões inválidas do marcador de migração', () => {
-    expect(() => validateAppState({ ...createSeedState(), eliteProtocolVersion: 2 })).toThrow();
+    expect(() => validateAppState({ ...createSeedState(), eliteProtocolVersion: ELITE_PROTOCOL_VERSION + 1 })).toThrow();
     expect(() => validateAppState({ ...createSeedState(), eliteProtocolVersion: -1 })).toThrow();
   });
 

@@ -1,7 +1,7 @@
 import type { AppState, Exercise, WorkoutPlan, MuscleGroup } from '../types';
 
 export const STARTER_PLAN_VERSION = 2 as const;
-export const ELITE_PROTOCOL_VERSION = 1 as const;
+export const ELITE_PROTOCOL_VERSION = 2 as const;
 
 const PLAN_BY_WEEKDAY = [
   'plan-full-body-a',
@@ -95,7 +95,7 @@ export function createWeeklyWorkoutPlans(now = new Date().toISOString()): Workou
       exercise({ id: 'quarta-rosca-direta-halter', muscleGroup: 'biceps', name: 'Rosca direta com halteres', sets: 2, minReps: 8, reps: 12, restSeconds: 75, rir: '1–2', supersetGroup: 'A' }),
       exercise({ id: 'sabado-frances-polia', muscleGroup: 'triceps', name: 'Tríceps francês na polia', sets: 2, minReps: 10, reps: 15, restSeconds: 75, rir: '1–2', supersetGroup: 'A' }),
       exercise({ id: 'terca-panturrilha', muscleGroup: 'panturrilhas', name: 'Panturrilha em pé', sets: 2, minReps: 8, reps: 15, restSeconds: 75, rir: '1–2' }),
-      exercise({ id: 'pre-pallof', muscleGroup: 'core', name: 'Pallof press (antirrotação)', sets: 2, minReps: 10, reps: 15, restSeconds: 60, rir: '2', guidance: 'cada lado; sem dor ou pressão abdominal desconfortável' }),
+      exercise({ id: 'full-body-a-abdomen', muscleGroup: 'core', name: 'Crunch abdominal na polia', sets: 2, minReps: 10, reps: 15, restSeconds: 60, rir: '2', guidance: 'sem dor e com técnica controlada' }),
     ]),
     plan('plan-full-body-b', 'Full Body B', 'Pré-cirurgia · 19 séries · foco: puxada, posterior, ombros e core', [
       exercise({ id: 'terca-leg-press', muscleGroup: 'quadriceps', name: 'Leg press', sets: 3, minReps: 10, reps: 15, restSeconds: 150, rir: '2' }),
@@ -179,5 +179,24 @@ export function applyPreSurgicalProtocol(state: AppState, now = new Date().toISO
 /** User-authorized release migration. Never interrupt a session or reapply after edits. */
 export function upgradeEliteProtocol(state: AppState, now = new Date().toISOString()): AppState {
   if (state.eliteProtocolVersion === ELITE_PROTOCOL_VERSION || state.activeWorkout) return state;
+  if (state.eliteProtocolVersion === 1) {
+    // This release changes only Monday's old core exercise, not personalized fichas.
+    const plans = state.plans.map((plan) => {
+      if (plan.id !== 'plan-full-body-a' || !plan.exercises.some((item) => item.id === 'pre-pallof')) return plan;
+      return {
+        ...plan,
+        updatedAt: now,
+        exercises: plan.exercises.map((item) => item.id === 'pre-pallof' ? {
+          ...item,
+          id: 'full-body-a-abdomen',
+          name: 'Crunch abdominal na polia',
+          muscleGroup: 'core' as const,
+          // Pallof's per-side instruction does not apply to a cable crunch.
+          ...(item.notes ? { notes: item.notes.replace('cada lado; ', '') } : {}),
+        } : item),
+      };
+    });
+    return { ...state, plans, eliteProtocolVersion: ELITE_PROTOCOL_VERSION, updatedAt: now };
+  }
   return applyPreSurgicalProtocol(state, now);
 }

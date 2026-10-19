@@ -1,4 +1,8 @@
-# MeuTreino Elite 7.0.1
+# MeuTreino Elite 7.0.2
+
+## Ajuste da segunda-feira (7.0.2)
+- Pallof press substituído por Crunch abdominal na polia no Full Body A: 2 séries de 10–15 repetições, 60 s de descanso e RIR 2 na ficha padrão.
+- Migração pontual das fichas já instaladas: preserva os demais exercícios, parâmetros personalizados e histórico. Não interrompe sessão em andamento. Um novo identificador evita herdar a carga do Pallof; registros anteriores de crunch podem ser reutilizados normalmente.
 
 ## Treino e evolução
 - Progressão exige todas as séries, topo da faixa, carga comparável e RIR registrado adequado à prescrição. Ausência de RIR não é tratada como autorização para subir peso.
