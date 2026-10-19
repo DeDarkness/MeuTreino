@@ -30,13 +30,12 @@ import {
 import type { AppState, Preferences, WorkoutHistory, WorkoutPlan } from '../types';
 import { syncPushRest } from '../lib/pushNotifications';
 import { applyPreSurgicalProtocol, upgradeEliteProtocol } from '../lib/starterPlans';
-import type { TrainingMode } from '../lib/trainingModes';
 
 export interface WorkoutStoreActions {
   savePlan(input: WorkoutPlanInput): Promise<WorkoutPlan>;
   deletePlan(planId: string): Promise<void>;
   duplicatePlan(planId: string): Promise<WorkoutPlan>;
-  startWorkout(planId: string, mode?: TrainingMode): Promise<void>;
+  startWorkout(planId: string): Promise<void>;
   updateSet(exerciseId: string, setId: string, patch: ActiveSetPatch): Promise<void>;
   selectSet(exerciseId: string, setId: string): Promise<void>;
   completeSet(exerciseId: string, setId: string): Promise<void>;
@@ -172,8 +171,8 @@ export function useWorkoutStore(): WorkoutStore {
       return { state: changed.state, result: changed.plan };
     }), [commit]);
 
-  const startWorkout = useCallback((planId: string, mode: TrainingMode = 'complete') => commitState((current) =>
-    startWorkoutFromPlan(current, planId, new Date().toISOString(), mode).state), [commitState]);
+  const startWorkout = useCallback((planId: string) => commitState((current) =>
+    startWorkoutFromPlan(current, planId).state), [commitState]);
 
   const updateSet = useCallback((exerciseId: string, setId: string, patch: ActiveSetPatch) =>
     commitState((current) => updateActiveSet(current, exerciseId, setId, patch)), [commitState]);

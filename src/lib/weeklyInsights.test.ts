@@ -12,17 +12,16 @@ const session = (finishedAt: Date): WorkoutHistory => ({ id: 'history-test', pla
 });
 
 describe('semana planejada e volume realizado', () => {
-  it('calcula corretamente Completo, Express e uma semana mista', () => {
-    expect(weeklyInsights(plans, [], {}, monday).plannedSets).toBe(60);
-    const express = Object.fromEntries(plans.map((plan) => [plan.id, 'express' as const]));
-    expect(weeklyInsights(plans, [], express, monday).plannedSets).toBe(45);
-    expect(weeklyInsights(plans, [], { ...express, [plans[0].id]: 'complete' }, monday).plannedSets).toBe(50);
-    expect(weeklyInsights(plans, [], express, monday).rows.find((row) => row.muscle === 'peito')?.planned).toBe(8);
+  it('planeja apenas as 60 séries normais e preserva registros Express antigos', () => {
+    const data = weeklyInsights(plans, [session(monday)], monday);
+    expect(data.plannedSets).toBe(60);
+    expect(data.actualSets).toBe(1);
+    expect(data.rows.find((row) => row.muscle === 'peito')?.planned).toBe(8);
   });
   it('separa semanas por limites locais e não inclui a semana seguinte', () => {
     const sunday = session(new Date(2026, 9, 18, 23, 59));
     const nextMonday = session(new Date(2026, 9, 26));
-    const data = weeklyInsights(plans, [sunday, session(monday), nextMonday], {}, monday);
+    const data = weeklyInsights(plans, [sunday, session(monday), nextMonday], monday);
     expect(data.sessions).toHaveLength(1);
     expect(data.actualSets).toBe(1);
     expect(startOfLocalWeek(new Date(2026, 9, 25)).getDate()).toBe(19);
@@ -30,7 +29,7 @@ describe('semana planejada e volume realizado', () => {
   it('mantém o músculo registrado mesmo depois de editar a ficha', () => {
     const edited = structuredClone(plans);
     edited[0].exercises[0].muscleGroup = 'gluteos';
-    const data = weeklyInsights(edited, [session(monday)], {}, monday);
+    const data = weeklyInsights(edited, [session(monday)], monday);
     expect(data.rows.find((row) => row.muscle === 'quadriceps')?.actual).toBe(1);
     expect(data.rows.find((row) => row.muscle === 'gluteos')?.actual ?? 0).toBe(0);
   });
@@ -38,12 +37,12 @@ describe('semana planejada e volume realizado', () => {
     const old = session(monday);
     old.exercises[0].muscleGroup = undefined;
     old.exercises[0].exerciseName = 'Exercício excluído';
-    const data = weeklyInsights(plans, [old], {}, monday);
+    const data = weeklyInsights(plans, [old], monday);
     expect(data.unclassifiedSets).toBe(1);
     expect(data.actualSets).toBe(1);
   });
   it('não duplica o planejamento por causa de fichas arquivadas', () => {
-    expect(weeklyInsights([...plans, { ...plans[0], id: 'plan-arquivo-old' }], [], {}, monday).plannedSets).toBe(60);
+    expect(weeklyInsights([...plans, { ...plans[0], id: 'plan-arquivo-old' }], [], monday).plannedSets).toBe(60);
   });
   it('permite buscas sem acentos ou diferença de maiúsculas', () => {
     expect(searchText('  Tríceps FRÂNCÊS ')).toBe('triceps frances');

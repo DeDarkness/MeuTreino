@@ -6,7 +6,7 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 
 ### Elite 7.0
 
-Progressão baseada em repetições **e RIR**, microincrementos editáveis, planejamento Completo/Express por ficha, volume realmente realizado separado do plano, buscas, filtros de histórico e proteção local antes de operações de substituição/exclusão. Interface com redução de movimento e atualização somente por confirmação fora de uma sessão ativa. Detalhes em [RELEASE_NOTES_ELITE_7.md](RELEASE_NOTES_ELITE_7.md).
+Progressão baseada em repetições **e RIR**, microincrementos editáveis, apenas treino normal (sem Express), volume realmente realizado separado do plano, buscas, filtros de histórico e proteção local antes de operações de substituição/exclusão. Interface com redução de movimento e atualização somente por confirmação fora de uma sessão ativa. Detalhes em [RELEASE_NOTES_ELITE_7.md](RELEASE_NOTES_ELITE_7.md).
 
 - Criar, editar, duplicar e excluir fichas.
 - Full Body pré-cirurgia 3× por semana: A na segunda, B na quarta e C na sexta, com 28 entradas de exercícios e 60 séries semanais (20/19/21). Em instalações existentes, a atualização aplica o protocolo uma única vez, arquivando as fichas A/B/C anteriores com conteúdo diferente e preservando o histórico. Uma sessão em andamento adia a troca até ser finalizada. Reaplicação manual disponível em Ajustes → Protocolos de treino.

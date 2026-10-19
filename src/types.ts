@@ -119,6 +119,7 @@ export interface Preferences {
   vibrationEnabled: boolean;
   restAlertSound: 'bell' | 'beep';
   weightUnit: WeightUnit;
+  /** Legacy backup field; ignored by current training and planning. */
   weeklyPlanModes?: Record<string, 'complete' | 'express'>;
   reduceMotion?: boolean;
 }

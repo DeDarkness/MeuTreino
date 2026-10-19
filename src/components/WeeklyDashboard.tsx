@@ -1,15 +1,13 @@
 import { ChevronLeft, ChevronRight, Target, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import { formatDate } from '../lib/format';
-import { canUseExpress, MUSCLE_LABELS, type TrainingMode } from '../lib/trainingModes';
+import { MUSCLE_LABELS, plannedSets } from '../lib/trainingModes';
 import { startOfLocalWeek, weeklyInsights } from '../lib/weeklyInsights';
-import type { Preferences, WorkoutHistory, WorkoutPlan } from '../types';
+import type { WorkoutHistory, WorkoutPlan } from '../types';
 
-export function WeeklyDashboard({ plans, history, modes = {}, onModesChange }: {
+export function WeeklyDashboard({ plans, history }: {
   plans: WorkoutPlan[];
   history: WorkoutHistory[];
-  modes?: Preferences['weeklyPlanModes'];
-  onModesChange: (modes: Record<string, TrainingMode>) => void;
 }) {
   const [offset, setOffset] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -17,7 +15,7 @@ export function WeeklyDashboard({ plans, history, modes = {}, onModesChange }: {
   date.setDate(date.getDate() + offset * 7);
   const end = new Date(date);
   end.setDate(end.getDate() + 6);
-  const data = weeklyInsights(plans, history, modes, date);
+  const data = weeklyInsights(plans, history, date);
   return (
     <section className="elite-dashboard" aria-labelledby="weekly-dashboard-title">
       <div className="elite-section-top"><div><span className="eyebrow">TREINE COM INTENÇÃO</span><h2 id="weekly-dashboard-title">Sua semana, em foco</h2></div><Target aria-hidden="true" /></div>
@@ -34,9 +32,7 @@ export function WeeklyDashboard({ plans, history, modes = {}, onModesChange }: {
       <button type="button" className="elite-expand" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><TrendingUp size={17} />{expanded ? 'Recolher planejamento e músculos' : 'Planejamento e volume por músculo'}<ChevronRight size={16} /></button>
       {expanded ? <>
         <div className="elite-plan-modes" role="group" aria-label="Planejamento da semana">
-          {data.programmed.map((plan) => <div key={plan.id}><span>{plan.name}</span>{canUseExpress(plan) ? <div className="elite-mode-buttons">
-            {(['complete', 'express'] as const).map((mode) => <button key={mode} type="button" aria-pressed={(modes[plan.id] ?? 'complete') === mode} onClick={() => onModesChange({ ...modes, [plan.id]: mode })}>{mode === 'complete' ? 'Completo' : 'Express'}</button>)}
-          </div> : <small>Ficha personalizada</small>}</div>)}
+          {data.programmed.map((plan) => <div key={plan.id}><span>{plan.name}</span><small>{plannedSets(plan)} séries</small></div>)}
         </div>
         <div className="elite-volume-heading"><span>Músculo dominante</span><span>Feito / plano</span></div>
         {data.rows.map((row) => <div className="elite-volume-comparison" key={row.muscle}>
@@ -44,7 +40,7 @@ export function WeeklyDashboard({ plans, history, modes = {}, onModesChange }: {
           <div className="elite-volume-meter"><i style={{ width: `${Math.min(100, row.actual / Math.max(1, row.planned) * 100)}%` }} /></div>
         </div>)}
         {data.unclassifiedSets > 0 ? <p className="elite-caption">{data.unclassifiedSets} séries antigas ou sem músculo identificado entram no total, mas não são atribuídas por suposição.</p> : null}
-        <p className="elite-caption">Séries de trabalho, sem duplicar músculos auxiliares. Trabalho de glúteos em compostos não é contado à parte. Mudar o planejamento não altera suas fichas nem o histórico.</p>
+        <p className="elite-caption">Séries de trabalho das fichas normais, sem duplicar músculos auxiliares. Trabalho de glúteos em compostos não é contado à parte. Editar uma ficha não altera o histórico.</p>
       </> : null}
     </section>
   );

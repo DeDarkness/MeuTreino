@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { WeeklyDashboard } from '../src/components/WeeklyDashboard';
+import { HomeScreen } from '../src/screens/HomeScreen';
 import { createWeeklyWorkoutPlans } from '../src/lib/starterPlans';
 import { formatWeight, fromStoredWeight } from '../src/lib/format';
 
@@ -11,13 +12,23 @@ vi.mock('virtual:pwa-register/react', () => ({ useRegisterSW: () => ({
 import { UpdatePrompt } from '../src/components/UpdatePrompt';
 
 describe('interface Elite e controles de integridade', () => {
-  it('apresenta o planejamento misto de 50 séries sem afirmar que já foram realizadas', () => {
+  it('apresenta as 60 séries normais sem afirmar que já foram realizadas', () => {
     const html = renderToStaticMarkup(createElement(WeeklyDashboard, {
-      plans: createWeeklyWorkoutPlans(), history: [], modes: { 'plan-full-body-b': 'express', 'plan-full-body-c': 'express' }, onModesChange: () => undefined,
+      plans: createWeeklyWorkoutPlans(), history: [],
     }));
-    expect(html).toContain('/50');
+    expect(html).toContain('/60');
+    expect(html).not.toContain('Express');
     expect(html).toContain('registros da semana selecionada');
     expect(html).toContain('séries realizadas / plano');
+  });
+  it('não oferece Express nem seletor de modo na tela inicial', () => {
+    const html = renderToStaticMarkup(createElement(HomeScreen, {
+      plans: createWeeklyWorkoutPlans(), history: [], activeWorkout: null, showInstallPrompt: false,
+      onStart: () => undefined, onContinue: () => undefined, onGoPlans: () => undefined, onGoHistory: () => undefined,
+    }));
+    expect(html).not.toContain('Express');
+    expect(html).not.toContain('Duração do treino');
+    expect(html).toContain('Iniciar');
   });
   it('não permite recarregar por atualização com uma sessão ativa', () => {
     const html = renderToStaticMarkup(createElement(UpdatePrompt, { workoutInProgress: true }));

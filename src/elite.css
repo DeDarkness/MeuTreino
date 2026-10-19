@@ -25,9 +25,7 @@
 .elite-plan-modes { display: grid; gap: 10px; margin: 6px 0 22px; }
 .elite-plan-modes > div { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 .elite-plan-modes > div > span { font-size: .76rem; font-weight: 650; }
-.elite-mode-buttons { display: flex; padding: 3px; border-radius: 11px; background: rgba(0,0,0,.25); border: 1px solid var(--line); }
-.elite-mode-buttons button { min-height: 44px; min-width: 74px; padding: 9px; border: 0; border-radius: 8px; background: transparent; font-size: .71rem; color: var(--muted-strong); cursor: pointer; }
-.elite-mode-buttons button[aria-pressed=true] { background: var(--accent); color: #122003; font-weight: 750; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.elite-plan-modes small { color: var(--muted-strong); font-size: .72rem; }
 .elite-volume-heading { display: flex; justify-content: space-between; gap: 12px; padding-bottom: 10px; color: var(--muted); font-size: .63rem; text-transform: uppercase; letter-spacing: .07em; }
 .elite-volume-comparison { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.05); font-size: .74rem; }
 .elite-volume-comparison strong { color: var(--accent); font-variant-numeric: tabular-nums; }

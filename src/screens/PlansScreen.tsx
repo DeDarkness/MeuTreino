@@ -17,8 +17,8 @@ import {
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent } from 'react';
 
 import { useNumericDraft } from '../hooks/useNumericDraft';
-import type { ActiveWorkout, Exercise, WorkoutPlan, WorkoutHistory, Preferences, MuscleGroup } from '../types';
-import { canUseExpress, getModeExercises, MUSCLE_LABELS, plannedSets, type TrainingMode } from '../lib/trainingModes';
+import type { ActiveWorkout, Exercise, WorkoutPlan, WorkoutHistory, MuscleGroup } from '../types';
+import { MUSCLE_LABELS } from '../lib/trainingModes';
 import { WeeklyDashboard } from '../components/WeeklyDashboard';
 import { searchText } from '../lib/weeklyInsights';
 import './plans-screen.css';
@@ -28,9 +28,7 @@ export interface PlansScreenProps {
   activeWorkout: ActiveWorkout | null;
   defaultRestSeconds: number;
   history: WorkoutHistory[];
-  weeklyPlanModes: Preferences['weeklyPlanModes'];
-  onModesChange: (modes: Record<string, TrainingMode>) => void;
-  onStart: (plan: WorkoutPlan, mode?: TrainingMode) => void;
+  onStart: (plan: WorkoutPlan) => void;
   onSave: (plan: WorkoutPlan) => Promise<unknown>;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -82,15 +80,12 @@ export function PlansScreen({
   activeWorkout,
   defaultRestSeconds,
   history,
-  weeklyPlanModes,
-  onModesChange,
   onStart,
   onSave,
   onDelete,
   onDuplicate,
 }: PlansScreenProps) {
   const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null);
-  const [mode, setMode] = useState<TrainingMode>('complete');
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [editorDirty, setEditorDirty] = useState(false);
   const [savingEditor, setSavingEditor] = useState(false);
@@ -163,7 +158,7 @@ export function PlansScreen({
         </div>
       </header>
 
-      <WeeklyDashboard plans={plans} history={history} modes={weeklyPlanModes} onModesChange={onModesChange} />
+      <WeeklyDashboard plans={plans} history={history} />
       <label className="elite-search"><Search size={19} aria-hidden="true" /><input type="search" aria-label="Buscar treino ou exercício" placeholder="Buscar treino ou exercício…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       {archiveCount > 0 ? <button className="elite-expand" type="button" aria-pressed={showArchives} onClick={() => setShowArchives(!showArchives)}>{showArchives ? 'Ocultar' : 'Mostrar'} versões anteriores ({archiveCount})</button> : null}
       {plans.length > 0 && filteredPlans.length === 0 ? <p className="elite-empty-search">Nenhum treino encontrado para “{query}”. Tente o nome de um exercício.</p> : null}
@@ -183,7 +178,7 @@ export function PlansScreen({
             const totalSets = plan.exercises.reduce((total, exercise) => total + exercise.targetSets, 0);
             return (
               <article className={`plan-card${isActive ? ' is-active' : ''}`} key={plan.id}>
-                <button className="plan-card-main" type="button" onClick={() => { setMode(canUseExpress(plan) ? weeklyPlanModes?.[plan.id] ?? 'complete' : 'complete'); setSelectedPlan(plan); }}>
+                <button className="plan-card-main" type="button" onClick={() => setSelectedPlan(plan)}>
                   <span className="plan-card-icon" aria-hidden="true"><Dumbbell size={23} /></span>
                   <span className="plan-card-copy">
                     <span className="plan-card-title-row">
@@ -235,9 +230,7 @@ export function PlansScreen({
           onEdit={() => openEdit(selectedPlan)}
           onDelete={() => requestDelete(selectedPlan)}
           onDuplicate={() => { onDuplicate(selectedPlan.id); setSelectedPlan(null); }}
-          mode={mode}
-          onModeChange={(next) => { setMode(next); onModesChange({ ...weeklyPlanModes, [selectedPlan.id]: next }); }}
-          onStart={() => { onStart(selectedPlan, mode); setSelectedPlan(null); }}
+          onStart={() => { onStart(selectedPlan); setSelectedPlan(null); }}
         />
       ) : null}
 
@@ -278,8 +271,6 @@ function PlanDetailDialog({
   onDelete,
   onDuplicate,
   onStart,
-  mode,
-  onModeChange,
 }: {
   plan: WorkoutPlan;
   activeWorkout: ActiveWorkout | null;
@@ -288,13 +279,9 @@ function PlanDetailDialog({
   onDelete: () => void;
   onDuplicate: () => void;
   onStart: () => void;
-  mode: TrainingMode;
-  onModeChange: (mode: TrainingMode) => void;
 }) {
   const sameActivePlan = activeWorkout?.planId === plan.id;
   const anotherWorkoutIsActive = Boolean(activeWorkout && !sameActivePlan);
-  const canExpress = canUseExpress(plan);
-  const currentMode = canExpress ? mode : 'complete';
 
   return (
     <DialogShell title={plan.name} onClose={onClose}>
@@ -306,14 +293,8 @@ function PlanDetailDialog({
         </div>
       </div>
 
-      {canExpress && !activeWorkout ? (
-        <div className="elite-mode-picker" role="group" aria-label="Modo de treino">
-          <button type="button" className={currentMode === 'complete' ? 'is-selected' : ''} aria-pressed={currentMode === 'complete'} onClick={() => onModeChange('complete')}>Completo · {plannedSets(plan)} séries</button>
-          <button type="button" className={currentMode === 'express' ? 'is-selected' : ''} aria-pressed={currentMode === 'express'} onClick={() => onModeChange('express')}>Express · {plannedSets(plan, 'express')} séries</button>
-        </div>
-      ) : null}
       <div className="plan-detail-list">
-        {getModeExercises(plan, currentMode).map((exercise, index) => (
+        {plan.exercises.map((exercise, index) => (
           <article className="plan-detail-exercise" key={exercise.id}>
             <span className="plan-detail-number">{index + 1}</span>
             <div>

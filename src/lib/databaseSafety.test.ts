@@ -50,11 +50,11 @@ describe('proteção do histórico e compatibilidade', () => {
   });
   it('registra modo e grupo muscular como fotografia da sessão concluída', () => {
     const seed = createSeedState();
-    const started = startWorkoutFromPlan(seed, seed.plans[0].id, undefined, 'express').state;
+    const started = startWorkoutFromPlan(seed, seed.plans[0].id).state;
     const exercise = started.activeWorkout!.exercises[0];
     const completed = completeActiveSet(started, exercise.exerciseId, exercise.sets[0].id);
     const result = finishActiveWorkout(completed).history;
-    expect(result.trainingMode).toBe('express');
+    expect(result.trainingMode).toBe('complete');
     expect(result.exercises[0].muscleGroup).toBe('quadriceps');
   });
   it('não deixa concluir uma série com zero repetições', () => {

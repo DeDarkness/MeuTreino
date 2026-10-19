@@ -1,10 +1,10 @@
-# MeuTreino Elite 7.0.0
+# MeuTreino Elite 7.0.1
 
 ## Treino e evolução
 - Progressão exige todas as séries, topo da faixa, carga comparável e RIR registrado adequado à prescrição. Ausência de RIR não é tratada como autorização para subir peso.
 - Incrementos conservadores de até 5%, com passo de equipamento editável por exercício, em kg. Sugestões nunca alteram cargas automaticamente.
 - Estimativa de força limitada a séries de 1–12 repetições, explicitamente identificada como estimativa.
-- Semana planejada configurável por ficha Completo/Express; escolhas são guardadas no backup e reutilizadas na tela inicial.
+- Apenas treino normal, sem seletor Express na tela inicial, fichas ou painel semanal. Sessões novas usam todas as séries da ficha; preferências Express antigas são ignoradas. Histórico e sessões antigas continuam compatíveis, sem reescrita dos registros.
 - Volume realizado separado do planejado, com navegação por semana, contagem de sessões e séries por músculo dominante. Registros novos guardam o músculo da sessão; dados antigos ambíguos não são classificados por suposição.
 - Resumo compara volumes apenas com sessões do mesmo modo e configuração equivalente.
 - Revisar uma série já concluída não a transforma na próxima série anunciada pelo descanso.

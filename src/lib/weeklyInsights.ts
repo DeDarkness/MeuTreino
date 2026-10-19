@@ -1,5 +1,4 @@
 import type { MuscleGroup, WorkoutHistory, WorkoutPlan } from '../types';
-import { canUseExpress, getModeExercises, type TrainingMode } from './trainingModes';
 
 export function startOfLocalWeek(date = new Date()): Date {
   const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -14,7 +13,7 @@ export function weekSessions(history: WorkoutHistory[], date = new Date()): Work
   return history.filter((session) => Date.parse(session.finishedAt) >= start.getTime() && Date.parse(session.finishedAt) < end.getTime());
 }
 
-export function weeklyInsights(plans: WorkoutPlan[], history: WorkoutHistory[], modes: Record<string, TrainingMode> = {}, date = new Date()) {
+export function weeklyInsights(plans: WorkoutPlan[], history: WorkoutHistory[], date = new Date()) {
   const template = plans.filter((plan) => ['plan-full-body-a', 'plan-full-body-b', 'plan-full-body-c'].includes(plan.id));
   const programmed = template.length ? template : plans.filter((plan) => !plan.id.startsWith('plan-arquivo-'));
   const planned = new Map<MuscleGroup, number>();
@@ -23,8 +22,7 @@ export function weeklyInsights(plans: WorkoutPlan[], history: WorkoutHistory[], 
   let unclassifiedSets = 0;
   let actualSets = 0;
   for (const plan of programmed) {
-    const mode = canUseExpress(plan) ? modes[plan.id] ?? 'complete' : 'complete';
-    for (const exercise of getModeExercises(plan, mode)) {
+    for (const exercise of plan.exercises) {
       plannedSets += exercise.targetSets;
       if (exercise.muscleGroup) planned.set(exercise.muscleGroup, (planned.get(exercise.muscleGroup) ?? 0) + exercise.targetSets);
     }

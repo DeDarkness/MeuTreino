@@ -15,7 +15,6 @@ import { useWorkoutStore } from './hooks/useWorkoutStore';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { getRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
 import { enablePushNotifications } from './lib/pushNotifications';
-import type { TrainingMode } from './lib/trainingModes';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -112,7 +111,7 @@ export default function App() {
     );
   }
 
-  const openWorkout = async (plan: WorkoutPlan, mode: TrainingMode = 'complete') => {
+  const openWorkout = async (plan: WorkoutPlan) => {
     if (isStandalone && notificationPermission === 'default') {
       void enablePushNotifications().catch(() => undefined).finally(() => setNotificationPermission(getRestNotificationPermission()));
     }
@@ -121,7 +120,7 @@ export default function App() {
       setShowActiveWorkout(true);
       return;
     }
-    await store.startWorkout(plan.id, mode);
+    await store.startWorkout(plan.id);
     setShowActiveWorkout(true);
   };
 
@@ -269,9 +268,7 @@ export default function App() {
             history={state.history}
             activeWorkout={activeWorkout}
             showInstallPrompt={showIosInstallPrompt}
-            weeklyPlanModes={state.preferences.weeklyPlanModes}
-            onModesChange={(weeklyPlanModes) => runAction(store.updatePreferences({ weeklyPlanModes }))}
-            onStart={(plan, mode) => runAction(openWorkout(plan, mode))}
+            onStart={(plan) => runAction(openWorkout(plan))}
             onContinue={() => setShowActiveWorkout(true)}
             onGoPlans={() => setActiveTab('plans')}
             onGoHistory={() => setActiveTab('history')}
@@ -284,9 +281,7 @@ export default function App() {
             activeWorkout={activeWorkout}
             defaultRestSeconds={state.preferences.defaultRestSeconds}
             history={state.history}
-            weeklyPlanModes={state.preferences.weeklyPlanModes}
-            onModesChange={(weeklyPlanModes) => runAction(store.updatePreferences({ weeklyPlanModes }))}
-            onStart={(plan, mode) => runAction(openWorkout(plan, mode))}
+            onStart={(plan) => runAction(openWorkout(plan))}
             onSave={store.savePlan}
             onDelete={(id) => runAction(store.deletePlan(id))}
             onDuplicate={(id) => runAction(store.duplicatePlan(id))}

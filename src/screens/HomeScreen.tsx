@@ -11,17 +11,15 @@ import { useMemo, useState } from 'react';
 import { formatDate, greeting, todayLabel } from '../lib/format';
 import { WeeklyDashboard } from '../components/WeeklyDashboard';
 import { getSuggestedPlanId } from '../lib/starterPlans';
-import { canUseExpress, getModeExercises, plannedSets, type TrainingMode } from '../lib/trainingModes';
-import type { ActiveWorkout, Exercise, WorkoutHistory, WorkoutPlan, Preferences } from '../types';
+import { plannedSets } from '../lib/trainingModes';
+import type { ActiveWorkout, Exercise, WorkoutHistory, WorkoutPlan } from '../types';
 
 type HomeScreenProps = {
   plans: WorkoutPlan[];
   history: WorkoutHistory[];
   activeWorkout: ActiveWorkout | null;
   showInstallPrompt: boolean;
-  weeklyPlanModes: Preferences['weeklyPlanModes'];
-  onModesChange: (modes: Record<string, TrainingMode>) => void;
-  onStart: (plan: WorkoutPlan, mode?: TrainingMode) => void;
+  onStart: (plan: WorkoutPlan) => void;
   onContinue: () => void;
   onGoPlans: () => void;
   onGoHistory: () => void;
@@ -38,8 +36,6 @@ export function HomeScreen({
   history,
   activeWorkout,
   showInstallPrompt,
-  weeklyPlanModes,
-  onModesChange,
   onStart,
   onContinue,
   onGoPlans,
@@ -60,11 +56,7 @@ export function HomeScreen({
     ?? plans[0];
   const selectedDay = WORKOUT_DAYS.find((day) => day.planId === selectedPlan?.id);
   const availableDays = WORKOUT_DAYS.filter((day) => plans.some((plan) => plan.id === day.planId));
-  const expressAvailable = selectedPlan ? canUseExpress(selectedPlan) : false;
-  const selectedMode = expressAvailable ? activeWorkout?.planId === selectedPlan?.id
-    ? activeWorkout.trainingMode ?? (activeWorkout.planName.endsWith(' · Express') ? 'express' : 'complete')
-    : weeklyPlanModes?.[selectedPlan!.id] ?? 'complete' : 'complete';
-  const selectedSets = selectedPlan ? plannedSets(selectedPlan, selectedMode) : 0;
+  const selectedSets = selectedPlan ? plannedSets(selectedPlan) : 0;
   const completed = activeWorkout?.exercises.reduce(
     (total, item) => total + (item.skipped ? 0 : item.sets.filter((set) => set.completed).length),
     0,
@@ -135,40 +127,34 @@ export function HomeScreen({
           <p className="eyebrow">{selectedDay?.label ?? 'Treino escolhido'}</p>
           <h2>{selectedPlan.name}</h2>
           <p className="day-workout-hero__name">{selectedPlan.notes || 'Seu próximo passo começa aqui.'}</p>
-          {expressAvailable && !activeWorkout ? (
-            <div className="elite-mode-picker" role="group" aria-label="Duração do treino">
-              <button type="button" className={selectedMode === 'complete' ? 'is-selected' : ''} aria-pressed={selectedMode === 'complete'} onClick={() => onModesChange({ ...weeklyPlanModes, [selectedPlan.id]: 'complete' })}>Completo · {plannedSets(selectedPlan)} séries</button>
-              <button type="button" className={selectedMode === 'express' ? 'is-selected' : ''} aria-pressed={selectedMode === 'express'} onClick={() => onModesChange({ ...weeklyPlanModes, [selectedPlan.id]: 'express' })}>Express · {plannedSets(selectedPlan, 'express')} séries</button>
-            </div>
-          ) : null}
           <div className="hero-meta">
-            <span><Dumbbell size={16} /> {getModeExercises(selectedPlan, selectedMode).length} exercícios</span>
+            <span><Dumbbell size={16} /> {selectedPlan.exercises.length} exercícios</span>
             <span><Flame size={16} /> {selectedSets} séries</span>
           </div>
 
           <div className="workout-preview" aria-label="Primeiros exercícios">
-            {getModeExercises(selectedPlan, selectedMode).slice(0, 3).map((exercise, index) => (
+            {selectedPlan.exercises.slice(0, 3).map((exercise, index) => (
               <div className="workout-preview__row" key={exercise.id}>
                 <span>{String(index + 1).padStart(2, '0')}</span>
                 <strong>{exercise.name}</strong>
                 <small>{exercise.targetSets}×{repTarget(exercise)}</small>
               </div>
             ))}
-            {getModeExercises(selectedPlan, selectedMode).length > 3 ? <div className="workout-preview__more">+ {getModeExercises(selectedPlan, selectedMode).length - 3} exercícios</div> : null}
+            {selectedPlan.exercises.length > 3 ? <div className="workout-preview__more">+ {selectedPlan.exercises.length - 3} exercícios</div> : null}
           </div>
 
           <button
             className="button button-primary button-wide button-kinetic"
             type="button"
             disabled={anotherWorkoutIsActive}
-            onClick={() => selectedWorkoutIsActive ? onContinue() : onStart(selectedPlan, selectedMode)}
+            onClick={() => selectedWorkoutIsActive ? onContinue() : onStart(selectedPlan)}
           >
             <Play size={20} fill="currentColor" />
             {selectedWorkoutIsActive
               ? 'Continuar este treino'
               : anotherWorkoutIsActive
                 ? 'Finalize o treino em andamento'
-                : `Iniciar ${selectedDay?.label ?? 'treino'}${selectedMode === 'express' ? ' · Express' : ''}`}
+                : `Iniciar ${selectedDay?.label ?? 'treino'}`}
           </button>
         </article>
       ) : (
@@ -180,7 +166,7 @@ export function HomeScreen({
         </article>
       )}
 
-      <WeeklyDashboard plans={plans} history={history} modes={weeklyPlanModes} onModesChange={onModesChange} />
+      <WeeklyDashboard plans={plans} history={history} />
 
       {lastWorkout ? (
         <button className="last-workout-card interactive-card" type="button" onClick={onGoHistory}>

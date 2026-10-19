@@ -2,36 +2,38 @@ import { describe, expect, it } from 'vitest';
 
 import { createSeedState, validateAppState } from './database';
 import { applyPreSurgicalProtocol, createWeeklyWorkoutPlans, upgradeEliteProtocol } from './starterPlans';
-import { canUseExpress, getModeExercises, plannedSets, weeklyMuscleVolumes } from './trainingModes';
+import { plannedSets, weeklyMuscleVolumes } from './trainingModes';
 import { startWorkoutFromPlan } from './workout';
 
-describe('MeuTreino Elite: modo Express e métricas', () => {
+describe('MeuTreino Elite: apenas treino normal e métricas', () => {
   const plans = createWeeklyWorkoutPlans('2026-10-18T21:00:00.000Z');
 
-  it('calcula os 60 sets completos e 45 Express sem modificar as fichas', () => {
+  it('calcula os 60 sets normais sem modificar as fichas', () => {
     expect(plans.map((plan) => plannedSets(plan))).toEqual([20, 19, 21]);
-    expect(plans.map((plan) => plannedSets(plan, 'express'))).toEqual([15, 15, 15]);
-    expect(plans.map((plan) => plannedSets(plan))).toEqual([20, 19, 21]);
-    expect(plans.every(canUseExpress)).toBe(true);
-    expect(getModeExercises(plans[1], 'express').length).toBe(8);
     expect(plans[1].exercises.length).toBe(9);
   });
 
-  it('não propõe Express em ficha personalizada sem prescrição de corte', () => {
+  it('inicia fichas personalizadas sem cortes', () => {
     const custom = { ...plans[0], id: 'my-plan', notes: 'Personalizado' };
-    expect(canUseExpress(custom)).toBe(false);
-    expect(() => plannedSets(custom, 'express')).toThrow();
+    const state = { ...createSeedState(), plans: [custom] };
+    expect(startWorkoutFromPlan(state, custom.id).workout.exercises.map((exercise) => exercise.sets.length))
+      .toEqual(custom.exercises.map((exercise) => exercise.targetSets));
   });
 
   it('não aplica cortes por posição em uma ficha reordenada', () => {
     const reordered = { ...plans[0], exercises: [...plans[0].exercises].reverse() };
-    expect(canUseExpress(reordered)).toBe(false);
-    expect(() => getModeExercises(reordered, 'express')).toThrow();
+    const state = { ...createSeedState(), plans: [reordered] };
+    expect(startWorkoutFromPlan(state, reordered.id).workout.exercises.map((exercise) => exercise.sets.length))
+      .toEqual(reordered.exercises.map((exercise) => exercise.targetSets));
   });
 
   it('preserva o protocolo e a sessão Express em um backup JSON', () => {
     const state = applyPreSurgicalProtocol(createSeedState());
-    const active = startWorkoutFromPlan(state, state.plans[0].id, undefined, 'express').state;
+    const active = startWorkoutFromPlan(state, state.plans[0].id).state;
+    // Compatibility only: an already-running session from an old app is preserved.
+    active.activeWorkout!.trainingMode = 'express';
+    active.activeWorkout!.planName += ' · Express';
+    active.activeWorkout!.exercises[0].sets = active.activeWorkout!.exercises[0].sets.slice(0, 1);
     expect(validateAppState(JSON.parse(JSON.stringify(active)))).toEqual(active);
   });
 
@@ -69,13 +71,15 @@ describe('MeuTreino Elite: modo Express e métricas', () => {
     expect(Object.values(volumes).reduce((a, b) => a + b, 0)).toBe(60);
   });
 
-  it('inicia uma sessão Express, preserva a ficha e não toca no histórico', () => {
+  it('inicia apenas a sessão normal, mesmo com preferências Express antigas', () => {
     const seeded = createSeedState('2026-10-18T20:00:00.000Z');
     const installed = applyPreSurgicalProtocol(seeded);
     const original = installed.plans[0];
-    const changed = startWorkoutFromPlan(installed, original.id, '2026-10-18T22:45:00.000Z', 'express');
-    expect(changed.workout.planName).toContain('Express');
-    expect(changed.workout.exercises.reduce((n, e) => n + e.sets.length, 0)).toBe(15);
+    installed.preferences.weeklyPlanModes = { [original.id]: 'express' };
+    const changed = startWorkoutFromPlan(installed, original.id, '2026-10-18T22:45:00.000Z');
+    expect(changed.workout.planName).toBe(original.name);
+    expect(changed.workout.trainingMode).toBe('complete');
+    expect(changed.workout.exercises.reduce((n, e) => n + e.sets.length, 0)).toBe(20);
     expect(changed.state.plans[0]).toEqual(original);
     expect(changed.state.history).toEqual(installed.history);
     expect(() => startWorkoutFromPlan(changed.state, original.id)).toThrow('sessão em andamento');
