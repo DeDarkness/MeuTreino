@@ -12,9 +12,9 @@ const session = (finishedAt: Date): WorkoutHistory => ({ id: 'history-test', pla
 });
 
 describe('semana planejada e volume realizado', () => {
-  it('planeja apenas as 60 séries normais e preserva registros Express antigos', () => {
+  it('planeja apenas as 66 séries normais e preserva registros Express antigos', () => {
     const data = weeklyInsights(plans, [session(monday)], monday);
-    expect(data.plannedSets).toBe(60);
+    expect(data.plannedSets).toBe(66);
     expect(data.actualSets).toBe(1);
     expect(data.rows.find((row) => row.muscle === 'peito')?.planned).toBe(8);
   });
@@ -42,7 +42,7 @@ describe('semana planejada e volume realizado', () => {
     expect(data.actualSets).toBe(1);
   });
   it('não duplica o planejamento por causa de fichas arquivadas', () => {
-    expect(weeklyInsights([...plans, { ...plans[0], id: 'plan-arquivo-old' }], [], monday).plannedSets).toBe(60);
+    expect(weeklyInsights([...plans, { ...plans[0], id: 'plan-arquivo-old' }], [], monday).plannedSets).toBe(66);
   });
   it('permite buscas sem acentos ou diferença de maiúsculas', () => {
     expect(searchText('  Tríceps FRÂNCÊS ')).toBe('triceps frances');

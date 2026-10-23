@@ -5,19 +5,19 @@ import { createSeedState, validateAppState } from './database';
 import { applyPreSurgicalProtocol, createWeeklyWorkoutPlans, getSuggestedPlanId, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION } from './starterPlans';
 
 describe('treinos semanais prontos', () => {
-  it('cadastra o protocolo A/B/C com 28 exercícios e 60 séries efetivas', () => {
+  it('cadastra o protocolo A/B/C com 31 exercícios e 66 séries efetivas', () => {
     const plans = createWeeklyWorkoutPlans('2026-09-02T12:00:00.000Z');
     expect(plans.map((plan) => plan.name)).toEqual(['Full Body A', 'Full Body B', 'Full Body C']);
-    expect(plans.reduce((total, plan) => total + plan.exercises.length, 0)).toBe(28);
+    expect(plans.reduce((total, plan) => total + plan.exercises.length, 0)).toBe(31);
     expect(plans.reduce(
       (total, plan) => total + plan.exercises.reduce((sets, item) => sets + item.targetSets, 0),
       0,
-    )).toBe(60);
-    expect(plans.map((plan) => plan.exercises.reduce((sets, item) => sets + item.targetSets, 0))).toEqual([20, 19, 21]);
+    )).toBe(66);
+    expect(plans.map((plan) => plan.exercises.reduce((sets, item) => sets + item.targetSets, 0))).toEqual([22, 23, 21]);
     expect(plans[0].exercises[0]).toMatchObject({ targetSets: 3, targetReps: 10, restSeconds: 180 });
     expect(plans[0].exercises[0].notes).toContain('6–10 repetições · RIR 2–3');
-    expect(plans[0].exercises[5].supersetGroup).toBe('A');
-    expect(plans[0].exercises[6].supersetGroup).toBe('A');
+    expect(plans[0].exercises.find((item) => item.id === 'quarta-rosca-direta-halter')?.supersetGroup).toBe('A');
+    expect(plans[0].exercises.find((item) => item.id === 'sabado-frances-polia')?.supersetGroup).toBe('A');
   });
 
   it('instala o protocolo apenas mediante ação explícita sem apagar histórico nem planos pessoais', () => {
@@ -33,7 +33,7 @@ describe('treinos semanais prontos', () => {
     expect(upgraded.history).toEqual(history);
     expect(upgraded.plans.filter((plan) => plan.id === 'custom-1')).toHaveLength(1);
     expect(upgraded.plans.some((plan) => plan.name === 'Full Body A adaptado (versão pessoal anterior)')).toBe(true);
-    expect(upgraded.plans.find((plan) => plan.id === 'plan-full-body-a')?.exercises.length).toBe(9);
+    expect(upgraded.plans.find((plan) => plan.id === 'plan-full-body-a')?.exercises.length).toBe(10);
     expect(state.plans[0].name).toBe('Full Body A');
   });
 

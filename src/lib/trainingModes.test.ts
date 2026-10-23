@@ -8,9 +8,9 @@ import { startWorkoutFromPlan } from './workout';
 describe('MeuTreino Elite: apenas treino normal e métricas', () => {
   const plans = createWeeklyWorkoutPlans('2026-10-18T21:00:00.000Z');
 
-  it('calcula os 60 sets normais sem modificar as fichas', () => {
-    expect(plans.map((plan) => plannedSets(plan))).toEqual([20, 19, 21]);
-    expect(plans[1].exercises.length).toBe(9);
+  it('calcula os 66 sets normais sem modificar as fichas', () => {
+    expect(plans.map((plan) => plannedSets(plan))).toEqual([22, 23, 21]);
+    expect(plans[1].exercises.length).toBe(11);
   });
 
   it('inicia fichas personalizadas sem cortes', () => {
@@ -43,7 +43,7 @@ describe('MeuTreino Elite: apenas treino normal e métricas', () => {
       plans: seed.plans.map((plan) => ({ ...plan, notes: 'Ficha anterior' })) };
     const migrated = upgradeEliteProtocol(old);
     expect(migrated.plans).toHaveLength(6);
-    expect(migrated.plans.slice(0, 3).map((plan) => plannedSets(plan))).toEqual([20, 19, 21]);
+    expect(migrated.plans.slice(0, 3).map((plan) => plannedSets(plan))).toEqual([22, 23, 21]);
     expect(migrated.history).toBe(old.history);
     expect(migrated.preferences).toBe(old.preferences);
     expect(validateAppState(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
@@ -67,8 +67,8 @@ describe('MeuTreino Elite: apenas treino normal e métricas', () => {
 
   it('conta apenas o grupo dominante, sem duplicar a sobreposição', () => {
     const volumes = Object.fromEntries(weeklyMuscleVolumes(plans).map((item) => [item.muscle, item.sets]));
-    expect(volumes).toMatchObject({ quadriceps: 9, peito: 8, costas: 10, posterior: 6, panturrilhas: 6, core: 4 });
-    expect(Object.values(volumes).reduce((a, b) => a + b, 0)).toBe(60);
+    expect(volumes).toMatchObject({ quadriceps: 9, peito: 8, costas: 12, biceps: 6, triceps: 6, posterior: 6, panturrilhas: 6, core: 4 });
+    expect(Object.values(volumes).reduce((a, b) => a + b, 0)).toBe(66);
   });
 
   it('inicia apenas a sessão normal, mesmo com preferências Express antigas', () => {
@@ -79,7 +79,7 @@ describe('MeuTreino Elite: apenas treino normal e métricas', () => {
     const changed = startWorkoutFromPlan(installed, original.id, '2026-10-18T22:45:00.000Z');
     expect(changed.workout.planName).toBe(original.name);
     expect(changed.workout.trainingMode).toBe('complete');
-    expect(changed.workout.exercises.reduce((n, e) => n + e.sets.length, 0)).toBe(20);
+    expect(changed.workout.exercises.reduce((n, e) => n + e.sets.length, 0)).toBe(22);
     expect(changed.state.plans[0]).toEqual(original);
     expect(changed.state.history).toEqual(installed.history);
     expect(() => startWorkoutFromPlan(changed.state, original.id)).toThrow('sessão em andamento');

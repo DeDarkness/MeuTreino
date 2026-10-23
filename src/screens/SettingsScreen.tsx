@@ -123,10 +123,10 @@ export function SettingsScreen({
 
       <SettingsGroup title="Protocolos de treino" icon={<Dumbbell />}>
         <button className="setting-action" type="button" onClick={() => {
-          if (window.confirm('Aplicar Full Body pré-cirurgia (20/19/21 séries)? Isso substitui as fichas padrão A/B/C. O histórico e as demais fichas serão preservados. Fichas padrão editadas serão arquivadas como versões pessoais. Recomendamos exportar backup antes.')) {
+          if (window.confirm('Aplicar Full Body pré-cirurgia (22/23/21 séries)? Isso substitui as fichas padrão A/B/C. O histórico e as demais fichas serão preservados. Fichas padrão editadas serão arquivadas como versões pessoais. Recomendamos exportar backup antes.')) {
             void run(onInstallPreSurgicalProtocol, 'Protocolo pré-cirurgia instalado. Fichas e histórico pessoal preservados.');
           }
-        }}><Dumbbell /> <span><strong>Aplicar Full Body pré-cirurgia</strong><small>60 séries semanais · A/B/C · atualização manual e reversível por backup.</small></span></button>
+        }}><Dumbbell /> <span><strong>Aplicar Full Body pré-cirurgia</strong><small>66 séries semanais · A/B/C · prioridade em costas e braços · atualização manual e reversível por backup.</small></span></button>
       </SettingsGroup>
 
       <SettingsGroup title="Dados neste iPhone" icon={<Database />}>
@@ -176,7 +176,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 7.0.2 · seu treino, seus dados</span></footer>
+      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 7.1.0 · seu treino, seus dados</span></footer>
     </section>
   );
 }

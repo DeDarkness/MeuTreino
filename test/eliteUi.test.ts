@@ -12,11 +12,11 @@ vi.mock('virtual:pwa-register/react', () => ({ useRegisterSW: () => ({
 import { UpdatePrompt } from '../src/components/UpdatePrompt';
 
 describe('interface Elite e controles de integridade', () => {
-  it('apresenta as 60 séries normais sem afirmar que já foram realizadas', () => {
+  it('apresenta as 66 séries normais sem afirmar que já foram realizadas', () => {
     const html = renderToStaticMarkup(createElement(WeeklyDashboard, {
       plans: createWeeklyWorkoutPlans(), history: [],
     }));
-    expect(html).toContain('/60');
+    expect(html).toContain('/66');
     expect(html).not.toContain('Express');
     expect(html).toContain('registros da semana selecionada');
     expect(html).toContain('séries realizadas / plano');

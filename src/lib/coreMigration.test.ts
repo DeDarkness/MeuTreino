@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSeedState, loadState, readSafetySnapshot, saveState, validateAppState } from './database';
-import { createWeeklyWorkoutPlans, upgradeEliteProtocol } from './starterPlans';
+import { createWeeklyWorkoutPlans, ELITE_PROTOCOL_VERSION, upgradeEliteProtocol } from './starterPlans';
 import { completeActiveSet, finishActiveWorkout, startWorkoutFromPlan } from './workout';
 
 const legacyState = () => {
@@ -23,7 +23,7 @@ describe('troca pontual do core da segunda-feira', () => {
       id: 'full-body-a-abdomen', name: 'Crunch abdominal na polia', targetSets: 2,
       minReps: 10, targetReps: 15, restSeconds: 60, targetRirMin: 2,
     });
-    expect(monday.exercises.reduce((sum, item) => sum + item.targetSets, 0)).toBe(20);
+    expect(monday.exercises.reduce((sum, item) => sum + item.targetSets, 0)).toBe(22);
   });
 
   it('preserva parâmetros personalizados, outras fichas e exercícios', () => {
@@ -41,7 +41,7 @@ describe('troca pontual do core da segunda-feira', () => {
     expect(next.plans[2]).toBe(previous.plans[2]);
     expect(next.history).toBe(previous.history);
     expect(previous.plans[0].exercises.at(-1)!.id).toBe('pre-pallof');
-    expect(validateAppState(next).eliteProtocolVersion).toBe(2);
+    expect(validateAppState(next).eliteProtocolVersion).toBe(ELITE_PROTOCOL_VERSION);
   });
 
   it('mantém o histórico de Pallof e não herda sua carga para o crunch', () => {
@@ -70,8 +70,9 @@ describe('troca pontual do core da segunda-feira', () => {
     const previous = legacyState();
     previous.plans[0].exercises = previous.plans[0].exercises.filter((item) => item.id !== 'pre-pallof');
     const next = upgradeEliteProtocol(previous);
-    expect(next.plans[0]).toBe(previous.plans[0]);
-    expect(next.plans[0].exercises).toHaveLength(8);
+    expect(next.plans[0].exercises).toBe(previous.plans[0].exercises);
+    expect(next.plans[0].notes).toContain('20 séries');
+    expect(next.plans[0].exercises).toHaveLength(9);
   });
 
   it('faz cópia do estado anterior ao migrar dados já instalados', async () => {

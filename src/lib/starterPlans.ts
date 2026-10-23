@@ -1,7 +1,7 @@
 import type { AppState, Exercise, WorkoutPlan, MuscleGroup } from '../types';
 
 export const STARTER_PLAN_VERSION = 2 as const;
-export const ELITE_PROTOCOL_VERSION = 2 as const;
+export const ELITE_PROTOCOL_VERSION = 3 as const;
 
 const PLAN_BY_WEEKDAY = [
   'plan-full-body-a',
@@ -75,6 +75,38 @@ function exercise({
   };
 }
 
+const PRIORITY_ADDITIONS: Record<string, { afterId: string; item: ExerciseInput }[]> = {
+  'plan-full-body-a': [{
+    afterId: 'quarta-remada-maquina',
+    item: { id: 'full-body-a-puxada-neutra', muscleGroup: 'costas', name: 'Puxada alta com pegada neutra', sets: 2, minReps: 10, reps: 12, restSeconds: 120, rir: '2', guidance: 'movimento controlado, sem impulsionar o tronco; ajuste a carga para manter a técnica' },
+  }],
+  'plan-full-body-b': [{
+    afterId: 'b-elevacao-lateral',
+    item: { id: 'full-body-b-rosca-polia', muscleGroup: 'biceps', name: 'Rosca direta na polia', sets: 2, minReps: 10, reps: 15, restSeconds: 90, rir: '2', guidance: 'sem embalo do tronco; use amplitude confortável e mantenha o controle' },
+  }, {
+    afterId: 'full-body-b-rosca-polia',
+    item: { id: 'full-body-b-triceps-corda', muscleGroup: 'triceps', name: 'Tríceps corda na polia', sets: 2, minReps: 10, reps: 15, restSeconds: 90, rir: '2', guidance: 'cotovelos estáveis; movimento controlado, sem dor articular' },
+  }],
+};
+
+function addPriorityExercises(plan: WorkoutPlan, now: string): WorkoutPlan {
+  const additions = PRIORITY_ADDITIONS[plan.id];
+  if (!additions) return plan;
+  const nameKey = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ');
+  const exercises = [...plan.exercises];
+  let changed = false;
+  for (const { afterId, item } of additions) {
+    if (exercises.some((existing) => existing.id === item.id || nameKey(existing.name) === nameKey(item.name))) continue;
+    const anchor = exercises.findIndex((existing) => existing.id === afterId);
+    exercises.splice(anchor === -1 ? exercises.length : anchor + 1, 0, exercise(item));
+    changed = true;
+  }
+  const sets = exercises.reduce((sum, item) => sum + item.targetSets, 0);
+  const notes = plan.notes?.replace(/^(Pré-cirurgia · )\d+( séries ·)/, (_match, prefix: string, suffix: string) => `${prefix}${sets}${suffix}`);
+  if (!changed && notes === plan.notes) return plan;
+  return { ...plan, exercises: changed ? exercises : plan.exercises, notes, updatedAt: now };
+}
+
 export function createWeeklyWorkoutPlans(now = new Date().toISOString()): WorkoutPlan[] {
   const plan = (id: string, name: string, notes: string, exercises: Exercise[]): WorkoutPlan => ({
     id,
@@ -120,7 +152,7 @@ export function createWeeklyWorkoutPlans(now = new Date().toISOString()): Workou
       exercise({ id: 'sabado-barra-w', muscleGroup: 'triceps', name: 'Tríceps corda ou barra W', sets: 2, minReps: 8, reps: 12, restSeconds: 75, rir: '1–2', supersetGroup: 'C' }),
       exercise({ id: 'sexta-panturrilha', muscleGroup: 'panturrilhas', name: 'Panturrilha em pé ou sentado', sets: 2, minReps: 12, reps: 20, restSeconds: 75, rir: '1–2' }),
     ]),
-  ];
+  ].map((item) => addPriorityExercises(item, now));
 }
 
 export function installWeeklyWorkoutPlans(state: AppState, now = new Date().toISOString()): AppState {
@@ -179,6 +211,7 @@ export function applyPreSurgicalProtocol(state: AppState, now = new Date().toISO
 /** User-authorized release migration. Never interrupt a session or reapply after edits. */
 export function upgradeEliteProtocol(state: AppState, now = new Date().toISOString()): AppState {
   if (state.eliteProtocolVersion === ELITE_PROTOCOL_VERSION || state.activeWorkout) return state;
+  let upgraded = state;
   if (state.eliteProtocolVersion === 1) {
     // This release changes only Monday's old core exercise, not personalized fichas.
     const plans = state.plans.map((plan) => {
@@ -196,7 +229,13 @@ export function upgradeEliteProtocol(state: AppState, now = new Date().toISOStri
         } : item),
       };
     });
-    return { ...state, plans, eliteProtocolVersion: ELITE_PROTOCOL_VERSION, updatedAt: now };
+    upgraded = { ...state, plans, eliteProtocolVersion: 2, updatedAt: now };
   }
+  if (upgraded.eliteProtocolVersion === 2) return {
+    ...upgraded,
+    plans: upgraded.plans.map((plan) => addPriorityExercises(plan, now)),
+    eliteProtocolVersion: ELITE_PROTOCOL_VERSION,
+    updatedAt: now,
+  };
   return applyPreSurgicalProtocol(state, now);
 }

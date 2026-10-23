@@ -1,4 +1,10 @@
-# MeuTreino Elite 7.0.2
+# MeuTreino Elite 7.1.0
+
+## Prioridade em costas e braços (7.1.0)
+- Segunda: Puxada alta com pegada neutra, 2×10–12, descanso 120 s, RIR 2.
+- Quarta: Rosca direta na polia e Tríceps corda na polia, 2×10–15 cada, descanso 90 s, RIR 2.
+- Demais séries mantidas. Fichas padrão com 22/23/21 séries, 66 na semana: costas 12, bíceps 6, tríceps 6 séries diretas. Tempo real depende de aquecimento, execução, descansos e disponibilidade dos aparelhos; 90 minutos é limite, não duração prometida.
+- Migração pontual encadeada das versões 1/2 para 3, preservando edições e histórico, sem duplicação por ID/nome e sem alterar sessão ativa. A troca do Pallof por crunch segue preservada.
 
 ## Ajuste da segunda-feira (7.0.2)
 - Pallof press substituído por Crunch abdominal na polia no Full Body A: 2 séries de 10–15 repetições, 60 s de descanso e RIR 2 na ficha padrão.
