@@ -25,10 +25,10 @@ export function WeeklyDashboard({ plans, history }: {
         <button type="button" aria-label="Próxima semana" disabled={offset === 0} onClick={() => setOffset(offset + 1)}><ChevronRight size={19} /></button>
       </div>
       <div className="elite-week-metrics">
-        <div><strong>{data.sessions.length}<small>/{data.programmed.length || '—'}</small></strong><span>sessões registradas</span></div>
+        <div><strong>{data.sessions.length}</strong><span>registros nesta semana</span></div>
         <div><strong>{data.actualSets}<small>/{data.plannedSets}</small></strong><span>séries realizadas / plano</span></div>
       </div>
-      <p className="elite-caption">Realizado: registros da semana selecionada. Plano: sua configuração atual, não uma meta clínica.</p>
+      <p className="elite-caption">Realizado: registros da semana selecionada, incluindo sessões parciais e reposições. Pendências não contam como séries feitas nem aumentam o plano. Plano: sua configuração atual, não uma meta clínica.</p>
       <button type="button" className="elite-expand" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><TrendingUp size={17} />{expanded ? 'Recolher planejamento e músculos' : 'Planejamento e volume por músculo'}<ChevronRight size={16} /></button>
       {expanded ? <>
         <div className="elite-plan-modes" role="group" aria-label="Planejamento da semana">

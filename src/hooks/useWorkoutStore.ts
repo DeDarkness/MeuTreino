@@ -20,6 +20,8 @@ import {
   selectActiveSet,
   skipRest,
   startWorkoutFromPlan,
+  startRecoveryWorkout,
+  queueMissedWorkoutPlan,
   toggleSkipActiveExercise,
   uncompleteActiveSet,
   updateActiveSet,
@@ -27,7 +29,8 @@ import {
   type ActiveSetPatch,
   type WorkoutPlanInput,
 } from '../lib/workout';
-import type { AppState, Preferences, WorkoutHistory, WorkoutPlan } from '../types';
+import type { AppState, Preferences, RecoverySelection, WorkoutHistory, WorkoutPlan } from '../types';
+import { discardRecoveryItem } from '../lib/recovery';
 import { syncPushRest } from '../lib/pushNotifications';
 import { applyPreSurgicalProtocol, upgradeEliteProtocol } from '../lib/starterPlans';
 
@@ -36,6 +39,9 @@ export interface WorkoutStoreActions {
   deletePlan(planId: string): Promise<void>;
   duplicatePlan(planId: string): Promise<WorkoutPlan>;
   startWorkout(planId: string): Promise<void>;
+  startRecovery(selections: RecoverySelection[]): Promise<void>;
+  discardRecovery(id: string): Promise<void>;
+  queueMissedPlan(planId: string): Promise<void>;
   updateSet(exerciseId: string, setId: string, patch: ActiveSetPatch): Promise<void>;
   selectSet(exerciseId: string, setId: string): Promise<void>;
   completeSet(exerciseId: string, setId: string): Promise<void>;
@@ -122,7 +128,7 @@ export function useWorkoutStore(): WorkoutStore {
 
   const commit = useCallback(async <T,>(change: (current: AppState) => { state: AppState; result: T; checkpointLabel?: string }, checkpointLabel?: string): Promise<T> => {
     if (importingRef.current) {
-      const message = 'Aguarde a importação do backup terminar.';
+      const message = 'Aguarde a gravação ou importação terminar.';
       if (mountedRef.current) setError(message);
       throw new Error(message);
     }
@@ -152,6 +158,39 @@ export function useWorkoutStore(): WorkoutStore {
 
   const commitState = useCallback((change: StateChange, checkpointLabel?: string): Promise<void> =>
     commit((current) => ({ state: change(current), result: undefined }), checkpointLabel), [commit]);
+
+  // Queue consumption and session closure must not appear successful before disk commits.
+  const commitDurable = useCallback(async <T,>(change: (current: AppState) => { state: AppState; result: T }, label: string): Promise<T> => {
+    if (importingRef.current) throw new Error('Aguarde a gravação ou importação terminar.');
+    importingRef.current = true;
+    try {
+      await writeQueueRef.current.catch(() => undefined);
+      const current = stateRef.current;
+      if (!current) throw new Error('Os dados ainda estão carregando.');
+      const changed = change(current);
+      validateAppState(changed.state);
+      await enqueueSave(changed.state, label);
+      stateRef.current = changed.state;
+      void syncPushRest(changed.state.activeWorkout, changed.state.preferences.soundEnabled).catch(() => undefined);
+      if (mountedRef.current) { setState(changed.state); setError(null); }
+      return changed.result;
+    } catch (cause) {
+      if (mountedRef.current) setError(errorMessage(cause));
+      throw cause;
+    } finally { importingRef.current = false; }
+  }, [enqueueSave]);
+
+  const startRecovery = useCallback((selections: RecoverySelection[]) => commitDurable((current) => ({
+    state: startRecoveryWorkout(current, selections).state, result: undefined,
+  }), 'Antes de iniciar reposição'), [commitDurable]);
+
+  const discardRecovery = useCallback((id: string) => commitDurable((current) => ({
+    state: discardRecoveryItem(current, id), result: undefined,
+  }), 'Antes de descartar pendência'), [commitDurable]);
+
+  const queueMissedPlan = useCallback((planId: string) => commitDurable((current) => ({
+    state: queueMissedWorkoutPlan(current, planId), result: undefined,
+  }), 'Antes de registrar ficha não realizada'), [commitDurable]);
 
   const savePlan = useCallback((input: WorkoutPlanInput) =>
     commit((current) => {
@@ -205,17 +244,17 @@ export function useWorkoutStore(): WorkoutStore {
     commitState((current) => skipRest(current)), [commitState]);
 
   const finishWorkout = useCallback(() =>
-    commit((current) => {
+    commitDurable((current) => {
       const changed = finishActiveWorkout(current);
       const upgraded = upgradeEliteProtocol(changed.state);
-      return { state: upgraded, result: changed.history, checkpointLabel: upgraded !== changed.state ? 'Antes da atualização das fichas' : undefined };
-    }), [commit]);
+      return { state: upgraded, result: changed.history };
+    }, 'Antes de encerrar sessão e guardar pendências'), [commitDurable]);
 
-  const abandonWorkout = useCallback(() => commit((current) => {
+  const abandonWorkout = useCallback(() => commitDurable((current) => {
     const next = { ...current, activeWorkout: null, updatedAt: new Date().toISOString() };
     const upgraded = upgradeEliteProtocol(next);
-    return { state: upgraded, result: undefined, checkpointLabel: upgraded !== next ? 'Antes da atualização das fichas' : undefined };
-  }), [commit]);
+    return { state: upgraded, result: undefined };
+  }, 'Antes de abandonar sessão'), [commitDurable]);
 
   const deleteHistory = useCallback((historyId: string) => commitState((current) => ({
     ...current,
@@ -294,6 +333,9 @@ export function useWorkoutStore(): WorkoutStore {
     deletePlan,
     duplicatePlan,
     startWorkout,
+    startRecovery,
+    discardRecovery,
+    queueMissedPlan,
     updateSet,
     selectSet,
     completeSet,
@@ -329,6 +371,9 @@ export function useWorkoutStore(): WorkoutStore {
     savePlan,
     skipCurrentRest,
     startWorkout,
+    startRecovery,
+    discardRecovery,
+    queueMissedPlan,
     updatePreferences,
     updateWorkoutNotes,
     updateSet,

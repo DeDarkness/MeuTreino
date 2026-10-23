@@ -1,0 +1,32 @@
+.recovery-panel { --border: var(--line); --text-secondary: var(--muted); border: 1px solid var(--border); border-radius: 24px; padding: 22px; background: var(--surface); scroll-margin-top: 24px; }
+.recovery-panel h2 { margin: 4px 0; }
+.recovery-empty { display: grid; gap: 7px; padding: 20px 0 4px; }
+.recovery-empty span, .recovery-item small, .recovery-item-actions label { color: var(--text-secondary); font-size: 13px; }
+.recovery-week { display: grid; gap: 8px; margin: 20px 0 14px; font-size: 13px; }
+.recovery-panel select { width: 100%; min-height: 46px; font-size: 16px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); background: var(--surface-raised, #202323); }
+.recovery-muscles { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+.recovery-muscles span { font-size: 12px; padding: 8px 10px; border-radius: 10px; background: rgb(185 244 83 / 8%); }
+.recovery-muscles b { margin-left: 7px; color: var(--accent); }
+.recovery-selection-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; margin: 12px 0; }
+.recovery-selection-tools strong { width: 100%; font-size: 14px; }
+.recovery-selection-tools button { min-height: 44px; }
+.recovery-items { display: grid; gap: 10px; }
+.recovery-item { padding: 14px; border: 1px solid var(--border); border-radius: 16px; min-width: 0; }
+.recovery-item.is-selected { border-color: var(--accent); background: rgb(185 244 83 / 4%); }
+.recovery-check { display: flex; align-items: center; min-height: 44px; gap: 12px; cursor: pointer; }
+.recovery-check input { width: 23px; height: 23px; flex-shrink: 0; accent-color: var(--accent); }
+.recovery-check span { display: grid; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.recovery-check strong { font-size: 15px; }
+.recovery-item-actions { display: flex; align-items: end; gap: 10px; margin-top: 14px; }
+.recovery-item-actions label { display: grid; flex: 1; gap: 6px; min-width: 0; }
+.recovery-discard { display: flex; justify-content: center; align-items: center; gap: 5px; min-height: 46px; padding: 8px; background: transparent; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 12px; font-size: 12px; }
+.recovery-discard:disabled { opacity: .4; }
+.recovery-notice { border-left: 3px solid var(--accent); padding: 10px 12px; font-size: 13px; line-height: 1.6; background: rgb(185 244 83 / 5%); }
+.recovery-error { color: var(--danger); font-size: 14px; line-height: 1.6; }
+.recovery-missed-button { margin-top: 12px; white-space: normal; }
+.recovery-dialog-backdrop { position: fixed; inset: 0; z-index: 200; background: rgb(0 0 0 / 78%); backdrop-filter: blur(10px); display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); }
+.recovery-dialog { width: min(100%, 440px); max-height: 90dvh; overflow: auto; padding: 26px; border-radius: 24px; border: 1px solid var(--line); background: var(--surface, #171b1a); box-shadow: 0 24px 90px #0009; }
+.recovery-dialog h2 { margin: 12px 0; }
+.recovery-dialog > p:not(.eyebrow) { font-size: 15px; line-height: 1.7; }
+.recovery-dialog .button { margin-top: 12px; white-space: normal; }
+@media (max-width: 380px) { .recovery-panel { padding: 17px; } .recovery-discard span { display: none; } .recovery-discard { min-width: 44px; } }

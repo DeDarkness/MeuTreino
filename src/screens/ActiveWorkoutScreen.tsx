@@ -191,7 +191,7 @@ export function ActiveWorkoutScreen({
         <RestPanel
           remainingSeconds={remainingRestSeconds}
           nextExerciseName={restTarget?.exercise.exerciseName ?? 'Treino registrado'}
-          nextSetNumber={restTarget?.set.setNumber ?? currentSet.setNumber}
+          nextSetNumber={restTarget ? restTarget.exercise.sets.findIndex((set) => set.id === restTarget.set.id) + 1 : setIndex + 1}
           totalSets={restTarget?.exercise.sets.length ?? exercise.sets.length}
           alertSound={preferences.restAlertSound}
           onAddRest={() => onAddRest(15)}
@@ -206,7 +206,7 @@ export function ActiveWorkoutScreen({
             <span>EXERCÍCIO {exerciseIndex + 1} DE {workout.exercises.length}</span>
             <h2>{exercise.exerciseName}</h2>
           </div>
-          <div className="active-workout__set-pill">Série {currentSet.setNumber}/{exercise.sets.length}</div>
+          <div className="active-workout__set-pill">Série {setIndex + 1}/{exercise.sets.length}{workout.recoveryItemIds ? ` · original ${currentSet.setNumber}` : ''}</div>
         </div>
 
         {exercise.supersetGroup ? (
@@ -395,7 +395,7 @@ export function ActiveWorkoutScreen({
       <footer className="active-workout__footer">
         <button className="active-workout__finish-button" type="button" onClick={onFinish}>
           <Trophy aria-hidden="true" size={20} />
-          Finalizar e salvar
+          Encerrar e guardar pendências
         </button>
         <button className="active-workout__abandon-button" type="button" onClick={onAbandon}>
           <X aria-hidden="true" size={18} />

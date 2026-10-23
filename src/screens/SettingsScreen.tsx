@@ -131,7 +131,7 @@ export function SettingsScreen({
 
       <SettingsGroup title="Dados neste iPhone" icon={<Database />}>
         <div className="privacy-box"><LockKeyhole /><div><strong>Treinos neste aparelho</strong><p>Treinos e histórico ficam somente aqui. Se você ativar os avisos em segundo plano, a Cloudflare recebe apenas a inscrição de notificações e os avisos agendados.</p></div></div>
-        <button className="setting-action" type="button" disabled={busy} onClick={() => run(onExport, 'Backup exportado.')}><Download /> <span><strong>Exportar backup</strong><small>Salve uma cópia em JSON no app Arquivos. O wallpaper não é incluído.</small></span></button>
+        <button className="setting-action" type="button" disabled={busy} onClick={() => run(onExport, 'Backup exportado.')}><Download /> <span><strong>Exportar backup</strong><small>Inclui fichas, histórico, sessão ativa e pendências de reposição. Salve no app Arquivos. O wallpaper não é incluído.</small></span></button>
         {checkpoint ? <button className="setting-action" type="button" disabled={busy} onClick={() => run(onExportRecovery, 'Cópia de segurança exportada. Use Importar backup se desejar restaurá-la.')}><Download /><span><strong>Exportar cópia de segurança anterior</strong><small>{checkpoint.label} · {formatDate(checkpoint.createdAt, true)}. Guardada antes de importar, excluir ou trocar fichas.</small></span></button> : null}
         <p className="elite-caption elite-settings-caption">Uma cópia anterior é protegida automaticamente nas operações acima. Ela permanece somente neste aparelho e não substitui um backup no app Arquivos.</p>
         <button className="setting-action" type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}><Upload /> <span><strong>Importar backup</strong><small>Valida o JSON antes de substituir os dados e preserva uma cópia anterior.</small></span></button>
@@ -157,10 +157,10 @@ export function SettingsScreen({
           <div className="persistence-ok"><Check size={17} /> Armazenamento persistente ativo</div>
         ) : null}
         <button className="setting-action danger" type="button" disabled={busy} onClick={() => {
-          if (window.confirm('Apagar todos os treinos, histórico e ajustes deste iPhone? Esta ação não pode ser desfeita.')) {
+          if (window.confirm('Apagar todos os treinos, histórico, pendências e ajustes deste iPhone? Esta ação não pode ser desfeita.')) {
             void run(onClear, 'Dados apagados.');
           }
-        }}><Trash2 /> <span><strong>Apagar todos os dados</strong><small>Remove treinos, histórico, sessão ativa, wallpaper e a cópia de segurança local.</small></span></button>
+        }}><Trash2 /> <span><strong>Apagar todos os dados</strong><small>Remove treinos, histórico, pendências, sessão ativa, wallpaper e a cópia de segurança local.</small></span></button>
       </SettingsGroup>
 
       <SettingsGroup title="Instalação" icon={<Smartphone />}>
@@ -176,7 +176,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 7.1.0 · seu treino, seus dados</span></footer>
+      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 7.2.0 · seu treino, seus dados</span></footer>
     </section>
   );
 }

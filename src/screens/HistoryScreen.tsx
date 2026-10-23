@@ -19,6 +19,7 @@ import { useMemo, useState } from 'react';
 import { formatDate, formatDuration, formatWeight } from '../lib/format';
 import { buildExerciseProgress, getLoadSuggestion, type ExerciseProgress } from '../lib/progress';
 import { searchText } from '../lib/weeklyInsights';
+import { recoveryWeekLabel } from '../lib/recovery';
 import type { WeightUnit, WorkoutHistory, WorkoutPlan } from '../types';
 
 type HistoryScreenProps = {
@@ -88,7 +89,7 @@ export function HistoryScreen({ history, plans, weightUnit, onDelete }: HistoryS
         view === 'progress' ? (
           <>
             <div className="summary-grid">
-              <Summary icon={<Dumbbell />} value={String(history.length)} label="treinos" />
+              <Summary icon={<Dumbbell />} value={String(history.length)} label="registros" />
               <Summary icon={<Clock3 />} value={formatDuration(totalSeconds)} label="tempo total" />
               <Summary icon={<Repeat2 />} value={String(totalSets)} label="séries" />
               <Summary icon={<RotateCcw />} value={String(totalReps)} label="repetições" />
@@ -327,6 +328,7 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
                 <strong>{item.planName}</strong>
                 <span>{formatDate(item.finishedAt, true)} · {formatDuration(item.durationSeconds)}</span>
                 <small>{item.exercises.length} exercícios · {itemSets} séries</small>
+                {item.recoveryWeekStart ? <small>Reposição · origem: {recoveryWeekLabel(item.recoveryWeekStart)}</small> : null}
               </div>
               <ChevronDown className="chevron" size={20} />
             </button>

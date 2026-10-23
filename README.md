@@ -4,6 +4,12 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 
 ## Recursos
 
+### Elite 7.2 — encerrar agora, escolher a reposição depois
+
+Encerre a sessão quando quiser, inclusive sem séries concluídas. Só séries realmente feitas entram no histórico; as restantes (inclusive exercícios pulados) ficam em **Início → Reposição da semana**, separadas pela semana local de origem, de segunda a domingo. Escolha os exercícios e a quantidade de séries para outro dia, inclusive sábado/domingo. A ficha normal continua com **22/23/21 séries, 66 semanais**; não há aumento automático nem obrigação de compensar tudo.
+
+Iniciar uma reposição apenas reserva a seleção. A fila só é descontada quando as séries concluídas são salvas com sucesso. Encerrar parcialmente mantém o restante; abandonar não consome a origem. Também é possível registrar manualmente uma ficha inteira não realizada (uma vez por semana, sem histórico falso) ou descartar pendências com confirmação. Backup JSON inclui a fila e a sessão ativa. Detalhes e limites técnicos: [RELEASE_NOTES_7_2.md](RELEASE_NOTES_7_2.md).
+
 ### Elite 7.0
 
 Progressão baseada em repetições **e RIR**, microincrementos editáveis, apenas treino normal (sem Express), volume realmente realizado separado do plano, buscas, filtros de histórico e proteção local antes de operações de substituição/exclusão. Interface com redução de movimento e atualização somente por confirmação fora de uma sessão ativa. Detalhes em [RELEASE_NOTES_ELITE_7.md](RELEASE_NOTES_ELITE_7.md).

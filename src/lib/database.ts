@@ -12,6 +12,7 @@ import {
   type WallpaperAsset,
 } from '../types';
 import { createWeeklyWorkoutPlans, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION, ELITE_PROTOCOL_VERSION, upgradeEliteProtocol } from './starterPlans';
+import { isWeekKey, MAX_RECOVERY_SETS, MAX_RECOVERY_SETS_PER_EXERCISE, MAX_SAVED_RECOVERY_ITEMS } from './recovery';
 
 const DATABASE_NAME = 'meutreino';
 const DATABASE_VERSION = 2;
@@ -169,6 +170,9 @@ function validateHistory(value: unknown, path: string, issues: string[]): value 
   }
 
   validateOptionalMetadata(value, path, issues);
+  if (value.recoveryWeekStart !== undefined && !isWeekKey(value.recoveryWeekStart)) issues.push(`${path}.recoveryWeekStart inválido`);
+  if (value.recoverySourcePlanIds !== undefined && (!isWeekKey(value.recoveryWeekStart) || !Array.isArray(value.recoverySourcePlanIds)
+    || value.recoverySourcePlanIds.length > MAX_EXERCISES_PER_PLAN || value.recoverySourcePlanIds.some((id) => !isNonEmptyString(id)))) issues.push(`${path}.recoverySourcePlanIds inválido`);
   if (!isNonEmptyString(value.id)) issues.push(`${path}.id é obrigatório`);
   if (value.planId !== null && !isNonEmptyString(value.planId)) issues.push(`${path}.planId deve ser nulo ou texto`);
   if (!isNonEmptyString(value.planName)) issues.push(`${path}.planName é obrigatório`);
@@ -192,6 +196,11 @@ function validateActiveWorkout(value: unknown, path: string, issues: string[]): 
   }
 
   validateOptionalMetadata(value, path, issues);
+  if (value.recoveryItemIds !== undefined && (!Array.isArray(value.recoveryItemIds) || !value.recoveryItemIds.length
+    || value.recoveryItemIds.length > MAX_EXERCISES_PER_PLAN || value.recoveryItemIds.some((id) => !isNonEmptyString(id))
+    || new Set(value.recoveryItemIds).size !== value.recoveryItemIds.length)) issues.push(`${path}.recoveryItemIds inválido`);
+  if ((value.recoveryItemIds !== undefined) !== (value.recoveryWeekStart !== undefined)
+    || value.recoveryWeekStart !== undefined && !isWeekKey(value.recoveryWeekStart)) issues.push(`${path}.recoveryWeekStart inválido`);
   if (!isNonEmptyString(value.id)) issues.push(`${path}.id é obrigatório`);
   if (value.planId !== null && !isNonEmptyString(value.planId)) issues.push(`${path}.planId deve ser nulo ou texto`);
   if (!isNonEmptyString(value.planName)) issues.push(`${path}.planName é obrigatório`);
@@ -220,6 +229,7 @@ function validateActiveWorkout(value: unknown, path: string, issues: string[]): 
       validateOptionalMetadata(exercise, exercisePath, issues);
       if (!isNonEmptyString(exercise.exerciseId)) issues.push(`${exercisePath}.exerciseId é obrigatório`);
       if (!isNonEmptyString(exercise.exerciseName)) issues.push(`${exercisePath}.exerciseName é obrigatório`);
+      if (exercise.sourceExerciseId !== undefined && !isNonEmptyString(exercise.sourceExerciseId)) issues.push(`${exercisePath}.sourceExerciseId inválido`);
       if (!isBoundedInteger(exercise.restSeconds, 0, MAX_REST_SECONDS)) issues.push(`${exercisePath}.restSeconds deve estar entre 0 e ${MAX_REST_SECONDS}`);
       if (exercise.minReps !== undefined && !isBoundedInteger(exercise.minReps, 1, MAX_REPS)) issues.push(`${exercisePath}.minReps inválido`);
       if (exercise.targetRirMin !== undefined && !isBoundedInteger(exercise.targetRirMin, 0, 4)) issues.push(`${exercisePath}.targetRirMin inválido`);
@@ -244,6 +254,8 @@ function validateActiveWorkout(value: unknown, path: string, issues: string[]): 
           return;
         }
         if (!isNonEmptyString(set.id)) issues.push(`${setPath}.id é obrigatório`);
+        if (set.recoveryItemId !== undefined && !isNonEmptyString(set.recoveryItemId)) issues.push(`${setPath}.recoveryItemId inválido`);
+        if (set.recoverySetId !== undefined && !isNonEmptyString(set.recoverySetId)) issues.push(`${setPath}.recoverySetId inválido`);
         if (!isPositiveInteger(set.setNumber)) issues.push(`${setPath}.setNumber deve ser maior que zero`);
         if (!isBoundedInteger(set.targetReps, 1, MAX_REPS)) issues.push(`${setPath}.targetReps deve estar entre 1 e ${MAX_REPS}`);
         if (!isBoundedInteger(set.reps, 0, MAX_REPS)) issues.push(`${setPath}.reps deve estar entre 0 e ${MAX_REPS}`);
@@ -288,6 +300,84 @@ function validatePreferences(value: unknown, path: string, issues: string[]): va
   return true;
 }
 
+function validateRecoveryState(value: Record<string, unknown>, issues: string[]) {
+  const items: Record<string, unknown>[] = [];
+  const itemIds = new Set<string>();
+  const setIds = new Set<string>();
+  if (value.recoveryItems !== undefined) {
+    if (!Array.isArray(value.recoveryItems) || value.recoveryItems.length > MAX_SAVED_RECOVERY_ITEMS) issues.push('recoveryItems excede o limite ou não é lista');
+    else value.recoveryItems.forEach((item, index) => {
+      const path = `recoveryItems[${index}]`;
+      if (!isRecord(item)) { issues.push(`${path} inválido`); return; }
+      items.push(item);
+      if (!isNonEmptyString(item.id) || itemIds.has(item.id)) issues.push(`${path}.id inválido ou repetido`);
+      else itemIds.add(item.id);
+      if (!isNonEmptyString(item.sourceWorkoutId)) issues.push(`${path}.sourceWorkoutId inválido`);
+      if (item.sourcePlanId !== undefined && !isNonEmptyString(item.sourcePlanId)) issues.push(`${path}.sourcePlanId inválido`);
+      if (!isNonEmptyString(item.sourcePlanName)) issues.push(`${path}.sourcePlanName inválido`);
+      if (!isWeekKey(item.weekStart)) issues.push(`${path}.weekStart inválido`);
+      if (!isIsoDate(item.savedAt)) issues.push(`${path}.savedAt inválido`);
+      validateActiveWorkout({ id: 'snapshot', planId: null, planName: 'Pendência', startedAt: item.savedAt, updatedAt: item.savedAt,
+        currentExerciseIndex: 0, currentSetIndex: 0, restStartedAt: null, restEndsAt: null, restDurationSeconds: null, exercises: [item.exercise],
+      }, path, issues);
+      if (isRecord(item.exercise)) {
+        if (item.exercise.sourceExerciseId !== undefined) issues.push(`${path} deve guardar a identidade original`);
+        if (Array.isArray(item.exercise.sets)) for (const set of item.exercise.sets) {
+          if (!isRecord(set)) continue;
+          if (set.completed !== false || set.completedAt !== null || set.recoveryItemId !== undefined || set.recoverySetId !== undefined) issues.push(`${path} contém série concluída ou com origem aninhada`);
+          if (typeof set.id === 'string') {
+            if (setIds.has(set.id)) issues.push(`${path} contém série duplicada na fila`);
+            setIds.add(set.id);
+          }
+        }
+      }
+    });
+  }
+  if (value.queuedMissedPlans !== undefined && (!Array.isArray(value.queuedMissedPlans) || value.queuedMissedPlans.length > 5000
+    || value.queuedMissedPlans.some((key) => typeof key !== 'string' || !isWeekKey(key.slice(0, 10)) || key.slice(10, 12) !== '::' || !key.slice(12).trim())
+    || new Set(value.queuedMissedPlans).size !== value.queuedMissedPlans.length)) issues.push('queuedMissedPlans inválido');
+  const active = value.activeWorkout;
+  if (!isRecord(active) || !Array.isArray(active.exercises)) return;
+  const activeExercises = active.exercises;
+  const reserved = Array.isArray(active.recoveryItemIds) ? active.recoveryItemIds : [];
+  const seen = new Set<string>();
+  const activeIds = new Set<string>();
+  const exerciseIds = new Set<string>();
+  const perExercise = new Map<string, number>();
+  let count = 0;
+  for (const exercise of activeExercises) {
+    if (!isRecord(exercise) || !Array.isArray(exercise.sets)) continue;
+    if (active.recoveryItemIds !== undefined && exerciseIds.has(String(exercise.exerciseId))) issues.push('Reposição contém identidade de exercício duplicada');
+    exerciseIds.add(String(exercise.exerciseId));
+    for (const set of exercise.sets) {
+      if (!isRecord(set)) continue;
+      if (active.recoveryItemIds === undefined) {
+        if (set.recoveryItemId !== undefined || set.recoverySetId !== undefined || exercise.sourceExerciseId !== undefined) issues.push('Sessão comum contém origem de reposição');
+        continue;
+      }
+      if (set.completed && (set.reps === 0 || !isIsoDate(set.completedAt))) issues.push('Reposição contém conclusão inválida');
+      count += 1;
+      const item = items.find((candidate) => candidate.id === set.recoveryItemId);
+      const original = item && isRecord(item.exercise) ? item.exercise : null;
+      const sourceSets = original && Array.isArray(original.sets) ? original.sets : [];
+      const sourceSet = sourceSets.find((source) => isRecord(source) && source.id === set.recoverySetId);
+      if (!item || !reserved.includes(item.id) || item.weekStart !== active.recoveryWeekStart || !original
+        || exercise.sourceExerciseId !== original.exerciseId || exercise.exerciseName !== original.exerciseName
+        || exercise.muscleGroup !== original.muscleGroup || !isRecord(sourceSet)
+        || set.setNumber !== sourceSet.setNumber || set.targetReps !== sourceSet.targetReps) issues.push('Reposição sem correspondência na fila');
+      const origin = `${String(set.recoveryItemId)}::${String(set.recoverySetId)}`;
+      if (seen.has(origin) || activeIds.has(String(set.id))) issues.push('Reposição contém série duplicada');
+      seen.add(origin); activeIds.add(String(set.id));
+      const key = `${String(exercise.sourceExerciseId)}::${String(exercise.exerciseName)}`;
+      perExercise.set(key, (perExercise.get(key) ?? 0) + 1);
+    }
+  }
+  if (active.recoveryItemIds !== undefined && (active.planId !== null || count < 1 || count > MAX_RECOVERY_SETS
+    || [...perExercise.values()].some((number) => number > MAX_RECOVERY_SETS_PER_EXERCISE)
+    || reserved.some((id) => !activeExercises.some((exercise) => isRecord(exercise) && Array.isArray(exercise.sets)
+      && exercise.sets.some((set) => isRecord(set) && set.recoveryItemId === id))))) issues.push('Reserva de reposição inválida');
+}
+
 export function validateAppState(value: unknown): AppState {
   const issues: string[] = [];
   if (!isRecord(value)) throw new DatabaseValidationError(['o estado deve ser um objeto']);
@@ -316,6 +406,7 @@ export function validateAppState(value: unknown): AppState {
     value.history.forEach((history, index) => validateHistory(history, `history[${index}]`, issues));
   }
   if (value.activeWorkout !== null) validateActiveWorkout(value.activeWorkout, 'activeWorkout', issues);
+  validateRecoveryState(value, issues);
   validatePreferences(value.preferences, 'preferences', issues);
   if (!isIsoDate(value.updatedAt)) issues.push('updatedAt deve ser uma data válida');
 
@@ -334,6 +425,8 @@ export function createSeedState(now = new Date().toISOString()): AppState {
     eliteProtocolVersion: ELITE_PROTOCOL_VERSION,
     plans: createWeeklyWorkoutPlans(now),
     history: [],
+    recoveryItems: [],
+    queuedMissedPlans: [],
     activeWorkout: null,
     preferences: {
       defaultRestSeconds: 90,

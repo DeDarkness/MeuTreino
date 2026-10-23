@@ -2,6 +2,7 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ActiveWorkoutDock } from './components/ActiveWorkoutDock';
+import { ActionDialog, type ActionConfirmation } from './components/ActionDialog';
 import { AppStatus } from './components/AppStatus';
 import { exportSafetySnapshot } from './lib/database';
 import { useReducedMotion } from './hooks/useReducedMotion';
@@ -15,6 +16,7 @@ import { useWorkoutStore } from './hooks/useWorkoutStore';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { getRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
 import { enablePushNotifications } from './lib/pushNotifications';
+import { localWeekKey, remainingSetCount } from './lib/recovery';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -36,6 +38,7 @@ export default function App() {
   const [storagePersistent, setStoragePersistent] = useState<boolean | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<RestNotificationPermission>(() => getRestNotificationPermission());
   const [completedSummary, setCompletedSummary] = useState<WorkoutHistory | null>(null);
+  const [confirmation, setConfirmation] = useState<ActionConfirmation | null>(null);
   const runAction = (operation: Promise<unknown>) => { void operation.catch(() => undefined); };
 
   useEffect(() => {
@@ -65,10 +68,6 @@ export default function App() {
       (total, exercise) => total + (exercise.skipped ? 0 : exercise.sets.filter((set) => set.completed).length),
       0,
     ) ?? 0,
-    [activeWorkout],
-  );
-  const totalSets = useMemo(
-    () => activeWorkout?.exercises.reduce((total, exercise) => total + (exercise.skipped ? 0 : exercise.sets.length), 0) ?? 0,
     [activeWorkout],
   );
   const showIosInstallPrompt = useMemo(() => {
@@ -120,8 +119,12 @@ export default function App() {
       setShowActiveWorkout(true);
       return;
     }
-    await store.startWorkout(plan.id);
-    setShowActiveWorkout(true);
+    const start = async () => { await store.startWorkout(plan.id); setShowActiveWorkout(true); };
+    if (state.recoveryItems?.some((item) => item.sourcePlanId === plan.id && item.weekStart === localWeekKey())) {
+      setConfirmation({ title: 'Iniciar a ficha inteira novamente?', message: 'Esta ficha já tem séries pendentes nesta semana. Iniciar outra sessão completa não substitui essas pendências. Para continuar só o que faltou, volte ao Início e use Reposição da semana.', confirmLabel: 'Iniciar nova sessão completa', onConfirm: start });
+      return;
+    }
+    await start();
   };
 
   const exportBackup = async (recovery = false) => {
@@ -158,6 +161,8 @@ export default function App() {
     setStoragePersistent(granted);
     return granted;
   };
+
+  const actionDialog = confirmation ? <ActionDialog action={confirmation} onClose={() => setConfirmation(null)} /> : null;
 
   if (showActiveWorkout && activeWorkout) {
     return (
@@ -218,20 +223,19 @@ export default function App() {
           onSkipRest={() => runAction(store.skipRest())}
           onAddRest={(seconds) => runAction(store.addRestSeconds(seconds))}
           onFinish={() => {
-            if (completedSets === 0) {
-              window.alert('Conclua pelo menos uma série antes de salvar o treino.');
-              return;
-            }
-            if (completedSets < totalSets && !window.confirm(`Você concluiu ${completedSets} de ${totalSets} séries. Finalizar e salvar mesmo assim?`)) return;
-            void store.finishWorkout().then((saved) => {
-              setShowActiveWorkout(false);
-              setActiveTab('history');
-              setCompletedSummary(saved);
-            }).catch(() => undefined);
+            const remaining = remainingSetCount(activeWorkout);
+            setConfirmation({ title: 'Encerrar esta sessão?',
+              message: `${completedSets ? `${completedSets} ${completedSets === 1 ? 'série será registrada' : 'séries serão registradas'} no histórico.` : 'Nenhuma série foi concluída: não será criado um treino no histórico.'} ${remaining ? `${remaining} ${remaining === 1 ? 'série não concluída fica' : 'séries não concluídas, inclusive exercícios pulados, ficam'} na fila para escolher outro dia.` : 'Todas as séries foram concluídas.'} Você decide se e quando repor.`,
+              confirmLabel: 'Encerrar e salvar', onConfirm: async () => {
+                const saved = await store.finishWorkout();
+                setShowActiveWorkout(false);
+                setActiveTab(saved.exercises.length ? 'history' : 'home');
+                setCompletedSummary(saved.exercises.length ? saved : null);
+              },
+            });
           }}
           onAbandon={() => {
-            if (!window.confirm('Abandonar este treino? As séries desta sessão não serão adicionadas ao histórico.')) return;
-            void store.abandonWorkout().then(() => setShowActiveWorkout(false)).catch(() => undefined);
+            setConfirmation({ title: 'Abandonar sem registrar?', message: `As séries feitas nesta tentativa não serão salvas no histórico. ${activeWorkout.recoveryItemIds ? 'Todas as pendências originais da reposição permanecem intactas.' : 'Não serão criadas pendências desta sessão. Para guardar o que falta, use Encerrar e guardar pendências.'}`, confirmLabel: 'Abandonar sessão', onConfirm: async () => { await store.abandonWorkout(); setShowActiveWorkout(false); setActiveTab('home'); } });
           }}
           onClose={() => setShowActiveWorkout(false)}
           notificationPermission={notificationPermission}
@@ -245,6 +249,7 @@ export default function App() {
           }}
         />
         <UpdatePrompt workoutInProgress />
+        {actionDialog}
       </div>
     );
   }
@@ -267,6 +272,11 @@ export default function App() {
             plans={state.plans}
             history={state.history}
             activeWorkout={activeWorkout}
+            recoveryItems={state.recoveryItems ?? []}
+            queuedMissedPlans={state.queuedMissedPlans ?? []}
+            onStartRecovery={async (selections) => { await store.startRecovery(selections); setShowActiveWorkout(true); }}
+            onDiscardRecovery={(item) => setConfirmation({ title: 'Descartar esta pendência?', message: `${item.exercise.exerciseName}: ${item.exercise.sets.length} séries serão retiradas da fila. Isso não registra séries feitas nem apaga o histórico. Uma cópia anterior ficará disponível nos Ajustes.`, confirmLabel: 'Descartar pendência', onConfirm: () => store.discardRecovery(item.id) })}
+            onQueueMissedPlan={(plan) => setConfirmation({ title: 'Guardar ficha não realizada?', message: `${plan.name}: todos os exercícios desta ficha entrarão na fila da semana atual, sem criar histórico. Use só se não treinou essa ficha nesta semana. Você poderá selecionar apenas parte dela para repor.`, confirmLabel: 'Guardar para escolher depois', onConfirm: () => store.queueMissedPlan(plan.id) })}
             showInstallPrompt={showIosInstallPrompt}
             onStart={(plan) => runAction(openWorkout(plan))}
             onContinue={() => setShowActiveWorkout(true)}
@@ -349,6 +359,7 @@ export default function App() {
         />
       ) : null}
       <UpdatePrompt workoutInProgress={Boolean(activeWorkout)} />
+      {actionDialog}
     </div>
   );
 }

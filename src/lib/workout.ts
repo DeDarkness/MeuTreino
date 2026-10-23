@@ -1,11 +1,15 @@
 import type {
   ActiveWorkout,
+  ActiveWorkoutExercise,
   ActiveWorkoutSet,
   AppState,
   Exercise,
   WorkoutHistory,
   WorkoutPlan,
+  RecoveryItem,
+  RecoverySelection,
 } from '../types';
+import { chooseRecoveryItems, localWeekKey, MAX_SAVED_RECOVERY_ITEMS, settleRecoveryItems } from './recovery';
 
 export type ExerciseInput = Omit<Exercise, 'id'> & { id?: string };
 
@@ -514,6 +518,10 @@ export function finishActiveWorkout(
     planId: workout.planId,
     planName: workout.planName,
     ...(workout.trainingMode ? { trainingMode: workout.trainingMode } : {}),
+    ...(workout.recoveryWeekStart ? {
+      recoveryWeekStart: workout.recoveryWeekStart,
+      recoverySourcePlanIds: [...new Set((state.recoveryItems ?? []).filter((item) => workout.recoveryItemIds?.includes(item.id)).flatMap((item) => item.sourcePlanId ? [item.sourcePlanId] : []))],
+    } : {}),
     startedAt: workout.startedAt,
     finishedAt,
     durationSeconds: Number.isFinite(startedAtMs)
@@ -521,7 +529,7 @@ export function finishActiveWorkout(
       : 0,
     exercises: workout.exercises
       .map((exercise) => ({
-        exerciseId: exercise.exerciseId,
+        exerciseId: exercise.sourceExerciseId ?? exercise.exerciseId,
         exerciseName: exercise.exerciseName,
         ...(exercise.muscleGroup ? { muscleGroup: exercise.muscleGroup } : {}),
         sets: exercise.sets
@@ -538,13 +546,83 @@ export function finishActiveWorkout(
       .filter((exercise) => exercise.sets.length > 0),
     ...(workout.notes?.trim() ? { notes: workout.notes.trim() } : {}),
   };
+  if (workout.recoveryItemIds) {
+    const grouped = new Map<string, WorkoutHistory['exercises'][number]>();
+    for (const exercise of history.exercises) {
+      const key = `${exercise.exerciseId}::${exercise.exerciseName}::${exercise.muscleGroup ?? ''}`;
+      const previous = grouped.get(key);
+      if (previous) previous.sets.push(...exercise.sets);
+      else grouped.set(key, exercise);
+    }
+    // Preserve original set numbers so the next normal session can restore loads by set.
+    history.exercises = [...grouped.values()];
+  }
+  // Recovery items stay reserved in the queue until this whole state is durably saved.
+  const recoveryItems = workout.recoveryItemIds
+    ? settleRecoveryItems(state, workout)
+    : [...(state.recoveryItems ?? []), ...pendingItemsFromWorkout(workout, finishedAt)];
+  if (recoveryItems.length > MAX_SAVED_RECOVERY_ITEMS) throw new Error('A fila está cheia. Seu treino continua aberto: no Início, descarte pendências antigas não reservadas e tente encerrar novamente.');
+  const week = workout.recoveryWeekStart ?? localWeekKey(new Date(workout.startedAt));
+  const currentWeek = localWeekKey(nowDate);
+  const ledger = (state.queuedMissedPlans ?? []).filter((key) => key.startsWith(`${currentWeek}::`) || key.startsWith(`${week}::`));
+  if (!workout.recoveryItemIds && workout.planId) ledger.push(`${week}::${workout.planId}`);
   return {
     state: {
       ...state,
       activeWorkout: null,
-      history: [history, ...state.history],
+      recoveryItems,
+      queuedMissedPlans: [...new Set(ledger)],
+      history: history.exercises.length ? [history, ...state.history] : state.history,
       updatedAt: finishedAt,
     },
     history,
+  };
+}
+
+function pendingItemsFromWorkout(workout: ActiveWorkout, savedAt: string): RecoveryItem[] {
+  return workout.exercises.flatMap((exercise) => {
+    const sets = exercise.sets.filter((set) => !set.completed).map((set) => ({ ...set, completed: false, completedAt: null }));
+    if (!sets.length) return [];
+    return [{ id: createWorkoutId('pending'), sourceWorkoutId: workout.id,
+      ...(workout.planId ? { sourcePlanId: workout.planId } : {}),
+      sourcePlanName: workout.planName, weekStart: localWeekKey(new Date(workout.startedAt)), savedAt,
+      exercise: { ...exercise, skipped: false, sets },
+    }];
+  });
+}
+
+export function startRecoveryWorkout(state: AppState, selections: RecoverySelection[], now = new Date().toISOString()): { state: AppState; workout: ActiveWorkout } {
+  const chosen = chooseRecoveryItems(state, selections);
+  const exercises: ActiveWorkoutExercise[] = chosen.map(({ item, sets }) => ({
+    ...item.exercise,
+    sourceExerciseId: item.exercise.exerciseId,
+    exerciseId: createWorkoutId('recovery-exercise'),
+    skipped: false,
+    supersetGroup: undefined,
+    sets: sets.map((set) => ({ ...set, id: createWorkoutId('set'), recoveryItemId: item.id, recoverySetId: set.id, completed: false, completedAt: null })),
+  }));
+  const workout: ActiveWorkout = {
+    id: createWorkoutId('recovery'), planId: null, planName: 'Reposição de séries',
+    startedAt: now, updatedAt: now, currentExerciseIndex: 0, currentSetIndex: 0,
+    restStartedAt: null, restEndsAt: null, restDurationSeconds: null,
+    recoveryItemIds: chosen.map(({ item }) => item.id), recoveryWeekStart: chosen[0].item.weekStart, exercises,
+  };
+  return { state: { ...state, activeWorkout: workout, updatedAt: now }, workout };
+}
+
+export function queueMissedWorkoutPlan(state: AppState, planId: string, now = new Date().toISOString()): AppState {
+  if (state.activeWorkout) throw new Error('Encerre a sessão atual antes de registrar uma ficha não realizada.');
+  const week = localWeekKey(new Date(now));
+  const key = `${week}::${planId}`;
+  if (state.queuedMissedPlans?.includes(key)
+    || state.recoveryItems?.some((item) => item.weekStart === week && item.sourcePlanId === planId)
+    || state.history.some((session) => session.planId === planId && localWeekKey(new Date(session.startedAt)) === week
+      || session.recoveryWeekStart === week && session.recoverySourcePlanIds?.includes(planId))) {
+    throw new Error('Esta ficha já foi registrada ou tem pendências nesta semana.');
+  }
+  const pending = pendingItemsFromWorkout(startWorkoutFromPlan(state, planId, now).workout, now);
+  if ((state.recoveryItems?.length ?? 0) + pending.length > MAX_SAVED_RECOVERY_ITEMS) throw new Error('Revise pendências antigas antes de adicionar esta ficha.');
+  return { ...state, recoveryItems: [...(state.recoveryItems ?? []), ...pending],
+    queuedMissedPlans: [...new Set([...(state.queuedMissedPlans ?? []).filter((entry) => entry.startsWith(`${week}::`)), key])], updatedAt: now,
   };
 }

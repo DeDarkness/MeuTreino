@@ -10,14 +10,21 @@ import { useMemo, useState } from 'react';
 
 import { formatDate, greeting, todayLabel } from '../lib/format';
 import { WeeklyDashboard } from '../components/WeeklyDashboard';
+import { RecoveryPanel } from '../components/RecoveryPanel';
+import { localWeekKey } from '../lib/recovery';
 import { getSuggestedPlanId } from '../lib/starterPlans';
 import { plannedSets } from '../lib/trainingModes';
-import type { ActiveWorkout, Exercise, WorkoutHistory, WorkoutPlan } from '../types';
+import type { ActiveWorkout, Exercise, RecoveryItem, RecoverySelection, WorkoutHistory, WorkoutPlan } from '../types';
 
 type HomeScreenProps = {
   plans: WorkoutPlan[];
   history: WorkoutHistory[];
   activeWorkout: ActiveWorkout | null;
+  recoveryItems: RecoveryItem[];
+  queuedMissedPlans: string[];
+  onStartRecovery: (selections: RecoverySelection[]) => Promise<void>;
+  onDiscardRecovery: (item: RecoveryItem) => void;
+  onQueueMissedPlan: (plan: WorkoutPlan) => void;
   showInstallPrompt: boolean;
   onStart: (plan: WorkoutPlan) => void;
   onContinue: () => void;
@@ -35,6 +42,11 @@ export function HomeScreen({
   plans,
   history,
   activeWorkout,
+  recoveryItems,
+  queuedMissedPlans,
+  onStartRecovery,
+  onDiscardRecovery,
+  onQueueMissedPlan,
   showInstallPrompt,
   onStart,
   onContinue,
@@ -64,6 +76,11 @@ export function HomeScreen({
   const total = activeWorkout?.exercises.reduce((sum, item) => sum + (item.skipped ? 0 : item.sets.length), 0) ?? 0;
   const selectedWorkoutIsActive = Boolean(activeWorkout && activeWorkout.planId === selectedPlan?.id);
   const anotherWorkoutIsActive = Boolean(activeWorkout && !selectedWorkoutIsActive);
+  const week = localWeekKey();
+  const hasWeeklyRecord = Boolean(selectedPlan && (queuedMissedPlans.includes(`${week}::${selectedPlan.id}`)
+    || recoveryItems.some((item) => item.sourcePlanId === selectedPlan.id && item.weekStart === week)
+    || history.some((item) => item.planId === selectedPlan.id && localWeekKey(new Date(item.startedAt)) === week
+      || item.recoveryWeekStart === week && item.recoverySourcePlanIds?.includes(selectedPlan.id))));
 
   return (
     <section className="screen home-screen home-screen--premium" aria-labelledby="home-title">
@@ -156,6 +173,10 @@ export function HomeScreen({
                 ? 'Finalize o treino em andamento'
                 : `Iniciar ${selectedDay?.label ?? 'treino'}`}
           </button>
+          <button className="button button-secondary button-wide recovery-missed-button" type="button" disabled={Boolean(activeWorkout) || hasWeeklyRecord} onClick={() => onQueueMissedPlan(selectedPlan)}>
+            {hasWeeklyRecord ? 'Ficha já registrada nesta semana' : 'Não fiz esta ficha · guardar para repor'}
+          </button>
+          <p className="elite-caption">Não precisa terminar tudo de uma vez. Você escolhe quando encerrar e o que repor.</p>
         </article>
       ) : (
         <article className="empty-card">
@@ -167,6 +188,7 @@ export function HomeScreen({
       )}
 
       <WeeklyDashboard plans={plans} history={history} />
+      <RecoveryPanel items={recoveryItems} activeWorkout={activeWorkout} onStart={onStartRecovery} onDiscard={onDiscardRecovery} />
 
       {lastWorkout ? (
         <button className="last-workout-card interactive-card" type="button" onClick={onGoHistory}>

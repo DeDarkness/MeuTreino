@@ -64,6 +64,8 @@ export interface WorkoutHistory {
   exercises: WorkoutExerciseHistory[];
   notes?: string;
   trainingMode?: 'complete' | 'express';
+  recoveryWeekStart?: string;
+  recoverySourcePlanIds?: string[];
 }
 
 export interface ActiveWorkoutSet {
@@ -75,11 +77,16 @@ export interface ActiveWorkoutSet {
   completed: boolean;
   completedAt: IsoDateString | null;
   rir?: number | null;
+  /** Stable queue provenance; active IDs are distinct from the saved pending set. */
+  recoveryItemId?: string;
+  recoverySetId?: string;
 }
 
 export interface ActiveWorkoutExercise {
   exerciseId: string;
   exerciseName: string;
+  /** Recovery sessions use unique runtime IDs while retaining the original identity. */
+  sourceExerciseId?: string;
   /** Structured training target copied at session start. */
   minReps?: number;
   targetRirMin?: number;
@@ -111,6 +118,23 @@ export interface ActiveWorkout {
   exercises: ActiveWorkoutExercise[];
   notes?: string;
   trainingMode?: 'complete' | 'express';
+  recoveryItemIds?: string[];
+  recoveryWeekStart?: string;
+}
+
+export interface RecoveryItem {
+  id: string;
+  sourceWorkoutId: string;
+  sourcePlanId?: string;
+  sourcePlanName: string;
+  weekStart: string;
+  savedAt: IsoDateString;
+  exercise: ActiveWorkoutExercise;
+}
+
+export interface RecoverySelection {
+  itemId: string;
+  setIds: string[];
 }
 
 export interface Preferences {
@@ -132,6 +156,9 @@ export interface AppState {
   eliteProtocolVersion?: number;
   plans: WorkoutPlan[];
   history: WorkoutHistory[];
+  recoveryItems?: RecoveryItem[];
+  /** Current-week anti-duplication ledger, including sessions ended with zero sets. */
+  queuedMissedPlans?: string[];
   activeWorkout: ActiveWorkout | null;
   preferences: Preferences;
   updatedAt: IsoDateString;
