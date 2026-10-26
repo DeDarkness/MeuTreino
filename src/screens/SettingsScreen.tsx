@@ -176,7 +176,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 8.0.0 · seu treino, seus dados</span></footer>
+      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 8.0.1 · seu treino, seus dados</span></footer>
     </section>
   );
 }

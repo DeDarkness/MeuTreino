@@ -362,6 +362,38 @@
   padding: 12px 8px;
   border-bottom: 1px solid var(--line);
 }
+.starter-diet-meal {
+  margin-block: 24px;
+  padding-block: 16px;
+  border-top: 1px solid var(--line);
+}
+.starter-diet .nutrition-mini-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.starter-diet summary {
+  min-height: 44px;
+  padding-block: 14px;
+  cursor: pointer;
+  color: var(--accent);
+}
+.starter-diet-meal ul {
+  padding-left: 22px;
+  line-height: 1.7;
+  font-size: 14px;
+}
+.starter-diet-check {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 12px;
+  margin-block: 20px;
+}
+.starter-diet-check input {
+  width: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  margin-top: 3px;
+}
 @media (max-width: 380px) {
   .nutrition-card {
     padding: 16px;

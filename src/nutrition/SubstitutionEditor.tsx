@@ -8,11 +8,15 @@ export function SubstitutionEditor({
   catalog,
   onCancel,
   onSave,
+  dayTotalKcal,
+  limitKcal,
 }: {
   entry: MealEntry;
   catalog: Food[];
   onCancel: () => void;
   onSave: (food: Food, quantity: number) => Promise<void>;
+  dayTotalKcal?: number;
+  limitKcal?: number | null;
 }) {
   const [metric, setMetric] = useState<"kcal" | "protein" | "carbs" | "fat">(
     "kcal",
@@ -59,6 +63,17 @@ export function SubstitutionEditor({
                 {display(result.delta.carbs)} g · G {display(result.delta.fat)}{" "}
                 g · fibras {display(result.delta.fiber)} g
               </span>
+              {dayTotalKcal !== undefined ? (
+                <span>
+                  Total do dia após a troca:{" "}
+                  {display(dayTotalKcal + result.delta.kcal)} kcal
+                  {limitKcal != null &&
+                  dayTotalKcal + result.delta.kcal > limitKcal + 0.01
+                    ? " · ultrapassa a meta informada"
+                    : ""}
+                  .
+                </span>
+              ) : null}
               {result.quantity > 1000 ? (
                 <p className="nutrition-warning">
                   Quantidade elevada: não é uma sugestão de porção.

@@ -44,6 +44,7 @@ import { GoalsEditor } from "./GoalsEditor";
 import { BodyPanel } from "./BodyPanel";
 import { PreopPanel } from "./PreopPanel";
 import { ReportPanel } from "./ReportPanel";
+import { StarterDietPanel } from "./StarterDietPanel";
 import "./nutrition.css";
 
 type NutritionTab =
@@ -233,6 +234,14 @@ export function NutritionScreen({
                 <ChevronRight />
               </button>
             </div>
+            {tab === "plan" ? (
+              <StarterDietPanel
+                state={state}
+                date={date}
+                catalog={catalog}
+                change={change}
+              />
+            ) : null}
             <article className="nutrition-card">
               <div className="nutrition-heading">
                 <div>
@@ -273,11 +282,13 @@ export function NutritionScreen({
                       {display(total[key])} <small>g</small>
                     </strong>
                     <small>Meta: {display(goals[key])} g</small>
-                    <progress
-                      aria-label={label}
-                      max={goals[key] || 1}
-                      value={Math.min(total[key] ?? 0, goals[key] || 1)}
-                    />
+                    {goals[key] !== null && goals[key]! > 0 ? (
+                      <progress
+                        aria-label={label}
+                        max={goals[key] || 1}
+                        value={Math.min(total[key] ?? 0, goals[key] || 1)}
+                      />
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -292,6 +303,15 @@ export function NutritionScreen({
                 <p className="nutrition-warning">
                   Meta informada por você, sem validação profissional
                   registrada. Não é uma prescrição do aplicativo.
+                </p>
+              ) : null}
+              {tab === "plan" &&
+              goals.kcal !== null &&
+              total.kcal > goals.kcal ? (
+                <p className="nutrition-warning" role="alert">
+                  O plano ultrapassa a meta informada em{" "}
+                  {display(total.kcal - goals.kcal)} kcal. Revise as quantidades
+                  e substituições; não há ajuste automático.
                 </p>
               ) : null}
             </article>
@@ -446,12 +466,23 @@ export function NutritionScreen({
                   Busque um alimento, confira a fonte e registre a quantidade.
                   Sem preenchimento fictício.
                 </p>
+                {tab === "diary" ? (
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    onClick={() => setTab("plan")}
+                  >
+                    Ver minha dieta pronta
+                  </button>
+                ) : null}
               </div>
             ) : null}
             {swapping ? (
               <SubstitutionEditor
                 entry={swapping}
                 catalog={catalog}
+                dayTotalKcal={total.kcal}
+                limitKcal={goals.kcal}
                 onCancel={() => setSwapping(null)}
                 onSave={async (food, quantity) => {
                   await change((current) =>

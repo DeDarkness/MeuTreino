@@ -12,6 +12,7 @@ export const MEALS = [
   "Café da manhã",
   "Lanche da manhã",
   "Almoço",
+  "Lanche da tarde",
   "Pré-treino",
   "Pós-treino",
   "Jantar",
