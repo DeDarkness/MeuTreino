@@ -14,6 +14,8 @@ export function EntryEditor({
   order,
   onSave,
   onCancel,
+  editorId = "meal-editor",
+  defaultMeal = "Almoço",
 }: {
   catalog: Food[];
   favorites: string[];
@@ -23,6 +25,8 @@ export function EntryEditor({
   order: number;
   onSave: (entry: MealEntry) => Promise<void>;
   onCancel: () => void;
+  editorId?: string;
+  defaultMeal?: string;
 }) {
   const [query, setQuery] = useState("");
   const [foodId, setFoodId] = useState(editing?.food.id ?? "");
@@ -41,7 +45,7 @@ export function EntryEditor({
         a.name.localeCompare(b.name),
     );
   return (
-    <article className="nutrition-card" id="meal-editor">
+    <article className="nutrition-card" id={editorId}>
       <h2>
         {editing
           ? "Editar registro"
@@ -125,12 +129,12 @@ export function EntryEditor({
             Refeição
             <input
               name="meal"
-              list="nutrition-meals"
+              list={`${editorId}-meals`}
               required
               maxLength={120}
-              defaultValue={editing?.meal ?? "Almoço"}
+              defaultValue={editing?.meal ?? defaultMeal}
             />
-            <datalist id="nutrition-meals">
+            <datalist id={`${editorId}-meals`}>
               {MEALS.map((meal) => (
                 <option key={meal}>{meal}</option>
               ))}
