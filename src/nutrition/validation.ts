@@ -151,6 +151,8 @@ function entry(value: unknown, template = false) {
     date(item.date, "data refeição");
   }
   text(item.meal, "nome da refeição", 120, true);
+  if (item.preparationOnly !== undefined)
+    bool(item.preparationOnly, "item de preparo");
   if (
     typeof item.time !== "string" ||
     (item.time !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.time))

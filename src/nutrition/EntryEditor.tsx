@@ -64,6 +64,9 @@ export function EntryEditor({
             meal: stringValue(data, "meal"),
             time: stringValue(data, "time"),
             order: editing?.order ?? order,
+            ...(editing?.preparationOnly !== undefined
+              ? { preparationOnly: editing.preparationOnly }
+              : {}),
             ...(editing?.planEntryId
               ? { planEntryId: editing.planEntryId }
               : {}),

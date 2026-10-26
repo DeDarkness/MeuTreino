@@ -367,6 +367,17 @@
   padding-block: 16px;
   border-top: 1px solid var(--line);
 }
+.nutrition-preparation {
+  margin-block: 14px;
+  border-top: 1px solid var(--line);
+}
+.nutrition-preparation > summary {
+  min-height: 44px;
+  padding-block: 14px;
+  cursor: pointer;
+  color: var(--muted-strong);
+  font-size: 13px;
+}
 .starter-diet .nutrition-mini-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;

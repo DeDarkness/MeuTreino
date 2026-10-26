@@ -16,12 +16,13 @@ type MealOption = {
   ingredients: readonly Ingredient[];
   preparation: string;
 };
-const chicken = "Peito de frango grelhado sem pele";
+const chicken = "Peito de frango cozido sem pele";
 const eggs = "Ovo inteiro cozido (sem casca)";
 const banana = "Banana prata/nanica media (parte comestivel)";
 const bread = "Pão de forma integral";
 const rice = "Arroz branco cozido sem óleo";
-const mince = "Patinho bovino grelhado";
+const mince = "Carne moída bovina magra cozida";
+const cheese = "Muçarela light";
 const pasta = "Macarrão comum cozido sem molho";
 const potato = "Batata inglesa cozida sem óleo";
 const broccoli = "Brocolis cozido sem óleo";
@@ -46,36 +47,38 @@ export const STARTER_DIET_MEALS: { meal: string; options: MealOption[] }[] = [
     meal: "Café da manhã",
     options: [
       {
-        name: "Crepioca de ovos com frango + banana",
+        name: "Crepioca com queijo + banana e 15 g de whey",
         ingredients: [
-          [tapioca, 40],
+          [tapioca, 20],
           [eggs, 100],
-          [chicken, 50],
-          [banana, 80],
+          [cheese, 25],
+          [banana, 60],
+          [whey, 15],
         ],
         preparation:
-          "Misture 40 g de goma hidratada com cerca de 2 ovos (100 g sem casca). Recheie com 50 g de frango pronto. Frigideira antiaderente, sem óleo extra; banana pesada sem casca. Ovos cozidos do catálogo são uma aproximação para os ovos preparados sem óleo.",
+          "Crepioca: 20 g de goma hidratada, cerca de 2 ovos (100 g sem casca) e 25 g de muçarela light. À parte: 60 g de banana e 15 g de whey em pó com água. Frigideira antiaderente, sem óleo extra. Os ovos do catálogo são referência aproximada para o preparo sem óleo; confira o rótulo do queijo e do whey.",
       },
       {
-        name: "Sanduíche de ovos e frango + banana",
+        name: "Sanduíche de ovos e queijo + banana",
         ingredients: [
-          [bread, 50],
+          [bread, 40],
           [eggs, 100],
-          [chicken, 50],
-          [banana, 40],
+          [cheese, 25],
+          [banana, 50],
         ],
         preparation:
-          "50 g de pão (confira o peso das fatias), 100 g de ovos sem casca e 50 g de frango pronto. Banana: 40 g de parte comestível. Sem manteiga ou maionese não registradas.",
+          "40 g de pão integral, cerca de 2 ovos (100 g sem casca), 25 g de muçarela light e 50 g de banana sem casca. Sem frango, manteiga ou maionese. Esta opção não tem whey no café; as proteínas diferem entre as trocas.",
       },
       {
-        name: "Omelete com frango + kiwi",
+        name: "Omelete com queijo + kiwi e 15 g de whey",
         ingredients: [
-          [eggs, 150],
-          [chicken, 70],
-          ["Kiwi", 80],
+          [eggs, 100],
+          [cheese, 30],
+          ["Kiwi", 100],
+          [whey, 15],
         ],
         preparation:
-          "Cerca de 3 ovos (150 g sem casca), 70 g de frango pronto e 80 g de kiwi sem casca. Prepare sem óleo extra; valores dos ovos são aproximados.",
+          "Omelete com cerca de 2 ovos (100 g sem casca) e 30 g de muçarela light. À parte: 100 g de kiwi sem casca e 15 g de whey em pó com água. Sem frango nem óleo extra; valores dos ovos são aproximados.",
       },
       {
         name: "Panqueca de aveia, ovos, whey e banana",
@@ -88,6 +91,18 @@ export const STARTER_DIET_MEALS: { meal: string; options: MealOption[] }[] = [
         preparation:
           "Triture 30 g de aveia pura, misture com cerca de 2 ovos (100 g sem casca), 15 g de whey em pó e 60 g de banana amassada. Use frigideira antiaderente, sem óleo extra. Se usar farinha de aveia comprada, confira e cadastre o rótulo; a referência é aveia pura, não mistura adoçada. Ovos do catálogo são aproximação para o preparo sem óleo.",
       },
+      {
+        name: "Crepioca com muçarela tradicional + banana e whey",
+        ingredients: [
+          [tapioca, 20],
+          [eggs, 100],
+          ["Muçarela tradicional", 25],
+          [banana, 60],
+          [whey, 15],
+        ],
+        preparation:
+          "Mesma crepioca-base, mas com 25 g de muçarela tradicional, não light. Banana e 15 g de whey com água à parte. As calorias e os macros são recalculados; confira o rótulo da sua marca.",
+      },
     ],
   },
   {
@@ -98,31 +113,31 @@ export const STARTER_DIET_MEALS: { meal: string; options: MealOption[] }[] = [
         ingredients: hot([
           [rice, 100],
           ["Feijão carioca cozido com caldo", 100],
-          [chicken, 130],
+          [chicken, 150],
           [broccoli, 100],
         ]),
         preparation:
-          "Arroz, feijão, frango e brócolis pesados prontos. Cebola, pimentão e alho pesados crus antes do preparo. Os 3 ml de azeite já são todo o óleo desta porção, não uma adição ao óleo da panela.",
+          "Arroz, feijão e legumes pesados prontos. Frango: 150 g da carne cozida, sem osso/pele, pesada sem o caldo. Use seus temperos no cozimento; a referência de preparo fica agrupada e pode ser ajustada. O óleo do preparo já está contado na referência, não acrescente outra vez.",
       },
       {
         name: "Macarrão com frango e legumes",
         ingredients: hot([
           [pasta, 140],
-          [chicken, 130],
+          [chicken, 150],
           [zucchini, 150],
         ]),
         preparation:
-          "Macarrão sem molho, frango e abobrinha pesados prontos; aromáticos crus. Use somente os 3 ml de azeite contabilizados. Molho de tomate, queijo e outros extras devem ser registrados.",
+          "Macarrão e legumes cozidos; 150 g da carne de frango cozida sem o caldo. Tempere durante o cozimento. Preparo agrupado inclui uma referência de temperos e óleo; molhos e queijo extras devem ser registrados.",
       },
       {
         name: "Batata com carne moída magra",
         ingredients: hot([
-          [potato, 230],
-          [mince, 110],
+          [potato, 210],
+          [mince, 140],
           [broccoli, 100],
         ]),
         preparation:
-          "Batata, carne e brócolis pesados prontos. Patinho grelhado é referência aproximada para patinho moído sem gordura extra. Conte os aromáticos e os 3 ml de azeite desta porção.",
+          "Batata, carne moída magra e legumes pesados prontos. Tempere como de costume; a referência de temperos e óleo está agrupada em Preparo incluído. O teor de gordura da carne muda os valores.",
       },
     ],
   },
@@ -130,56 +145,59 @@ export const STARTER_DIET_MEALS: { meal: string; options: MealOption[] }[] = [
     meal: "Lanche da tarde",
     options: [
       {
-        name: "Sanduíche de frango",
-        ingredients: [
-          [bread, 50],
-          [chicken, 70],
-          ["Tomate cru", 50],
-          ["Alface crua", 20],
-        ],
-        preparation:
-          "Monte com pão pesado, frango pronto, tomate e alface. Sem molho, manteiga ou maionese não registrados.",
-      },
-      {
-        name: "Iogurte com whey e manga",
+        name: "Iogurte com 15 g de whey, aveia e manga",
         ingredients: [
           [yogurt, 170],
-          [whey, 25],
+          [whey, 15],
+          ["Aveia em flocos secos", 15],
           ["Manga", 100],
         ],
         preparation:
-          "Misture 170 g de iogurte natural desnatado com 25 g de whey e 100 g de polpa de manga. Whey em gramas de pó, não proteína pura. Confira os rótulos das suas marcas.",
+          "170 g de iogurte natural desnatado, 15 g de whey em pó, 15 g de aveia pura (pode triturar) e 100 g de polpa de manga. Sem frango. Confira os rótulos; whey é peso do pó, não proteína pura.",
+      },
+      {
+        name: "Sanduíche de ovo e queijo",
+        ingredients: [
+          [bread, 40],
+          [eggs, 50],
+          [cheese, 25],
+          ["Tomate cru", 50],
+        ],
+        preparation:
+          "40 g de pão integral, cerca de 1 ovo (50 g sem casca), 25 g de muçarela light e 50 g de tomate. Sem frango, óleo ou molhos extras. Esta opção não usa whey no lanche.",
       },
       {
         name: "Iogurte com whey e kiwi",
         ingredients: [
           [yogurt, 170],
-          [whey, 25],
-          ["Kiwi", 95],
+          [whey, 15],
+          ["Aveia em flocos secos", 10],
+          ["Kiwi", 110],
         ],
         preparation:
-          "170 g de iogurte desnatado, 25 g de whey em pó e 95 g de kiwi sem casca. Confira os rótulos: iogurte integral, adoçado ou whey de outra marca alteram os valores.",
+          "170 g de iogurte desnatado, 15 g de whey em pó, 10 g de aveia pura e 110 g de kiwi sem casca. Confira os rótulos das suas marcas.",
       },
       {
         name: "Iogurte com whey e banana",
         ingredients: [
           [yogurt, 170],
-          [whey, 25],
+          [whey, 15],
+          ["Aveia em flocos secos", 10],
+          [banana, 70],
+        ],
+        preparation:
+          "170 g de iogurte desnatado, 15 g de whey em pó, 10 g de aveia pura e 70 g de banana sem casca. Sem mel, açúcar ou granola não registrados.",
+      },
+      {
+        name: "Tigela de iogurte, aveia, whey e banana",
+        ingredients: [
+          [yogurt, 170],
+          ["Aveia em flocos secos", 15],
+          [whey, 15],
           [banana, 65],
         ],
         preparation:
-          "170 g de iogurte desnatado, 25 g de whey em pó e 65 g de banana sem casca. Sem mel, açúcar ou granola não registrados.",
-      },
-      {
-        name: "Tigela de iogurte, aveia, whey e manga",
-        ingredients: [
-          [yogurt, 170],
-          ["Aveia em flocos secos", 20],
-          [whey, 15],
-          ["Manga", 40],
-        ],
-        preparation:
-          "Misture 170 g de iogurte desnatado, 20 g de aveia pura (em flocos ou triturada), 15 g de whey em pó e 40 g de polpa de manga. Pode hidratar na geladeira; não acrescente mel, leite ou granola sem registrar. Confira o rótulo se usar farinha de aveia comprada.",
+          "Misture 170 g de iogurte desnatado, 15 g de aveia pura, 15 g de whey em pó e 65 g de banana sem casca. Pode hidratar na geladeira; não acrescente mel, leite ou granola sem registrar. Confira o rótulo se usar farinha de aveia comprada.",
       },
     ],
   },
@@ -194,7 +212,7 @@ export const STARTER_DIET_MEALS: { meal: string; options: MealOption[] }[] = [
           [zucchini, 150],
         ]),
         preparation:
-          "Pesos prontos de batata, carne magra e abobrinha; aromáticos crus. Os 3 ml de azeite incluem todo o óleo desta porção. Patinho do catálogo é referência aproximada para a carne moída.",
+          "Batata, carne moída magra e abobrinha pesadas prontas. Preparo incluído agrupa a referência dos temperos e óleo. Sem frango nesta opção; confira a gordura da carne usada.",
       },
       {
         name: "Arroz com carne moída e brócolis",
@@ -204,17 +222,17 @@ export const STARTER_DIET_MEALS: { meal: string; options: MealOption[] }[] = [
           [broccoli, 150],
         ]),
         preparation:
-          "Pese arroz, carne e brócolis prontos. Refogue com os aromáticos e somente os 3 ml de azeite contabilizados.",
+          "Pese arroz, carne moída magra e legumes prontos. Os temperos e o óleo do preparo ficam agrupados na referência; não conte o mesmo óleo duas vezes.",
       },
       {
         name: "Macarrão com frango temperado",
         ingredients: hot([
           [pasta, 130],
-          [chicken, 120],
+          [chicken, 130],
           [zucchini, 150],
         ]),
         preparation:
-          "Pesos cozidos de macarrão sem molho, frango e abobrinha; aromáticos crus. Os 3 ml de azeite já estão incluídos. Registre molhos ou queijo à parte.",
+          "Opção com frango, se quiser: 130 g de carne cozida pesada sem caldo, macarrão e legumes prontos. Preparo incluído agrupa os temperos e óleo de referência. Não há obrigação de repetir frango no jantar.",
       },
     ],
   },
@@ -247,6 +265,10 @@ export function starterDietEntries(
         food: structuredClone(food),
         kind: "planned" as const,
         order: 0,
+        ...(aromatics.some(([ingredient]) => ingredient === name) ||
+        name === olive
+          ? { preparationOnly: true }
+          : {}),
       };
     });
   }).map((entry, order) => ({ ...entry, order }));
@@ -259,15 +281,19 @@ export function applyStarterDiet(
   choices: number[],
   setGoal: boolean,
   catalog: Food[] = ELITE_FOODS,
+  mode: "fill" | "replace" = "fill",
 ) {
   if (!validDate(start) || start < localDate())
     throw new Error("Use hoje ou uma data futura para o planejamento.");
   if (days !== 1 && days !== 7) throw new Error("Escolha um dia ou sete dias.");
+  if (mode !== "fill" && mode !== "replace")
+    throw new Error("Modo de aplicação inválido.");
   const dates = Array.from({ length: days }, (_, index) =>
     offsetDate(start, index),
   );
   const emptyDates = dates.filter(
     (date) =>
+      mode === "replace" ||
       !state.entries.some(
         (entry) => entry.date === date && entry.kind === "planned",
       ),
@@ -298,6 +324,13 @@ export function applyStarterDiet(
         },
       }
     : state;
+  if (mode === "replace")
+    next = {
+      ...next,
+      entries: next.entries.filter(
+        (entry) => entry.kind !== "planned" || !emptyDates.includes(entry.date),
+      ),
+    };
   for (const entries of generated)
     for (const entry of entries) next = saveMealEntry(next, entry);
   if (setGoal)
@@ -341,7 +374,7 @@ export function starterDietText(
       );
       mealEntries.forEach((entry) =>
         lines.push(
-          `  ${format(entry.quantity)} ${entry.food.unit} — ${entry.food.name}`,
+          `  ${entry.preparationOnly ? "[Detalhe do preparo incluído] " : ""}${format(entry.quantity)} ${entry.food.unit} — ${entry.food.name}`,
         ),
       );
       lines.push(`  Preparo: ${option.preparation}`);
@@ -349,7 +382,8 @@ export function starterDietText(
     lines.push("");
   });
   lines.push(
-    "Páprica, molhos e óleo extra devem ser registrados pelo rótulo. Azeite e aromáticos listados já estão incluídos; não acrescente outra vez o óleo da panela.",
+    "Preparo incluído agrupa temperos e azeite de referência; os detalhes continuam contados, mas não aparecem como acompanhamentos. Não é a medição da sua receita caseira. Ajuste quando souber quanto usa.",
+    "Frango: pese a carne cozida sem o caldo. Caldo não substitui gramas de carne nem é considerado automaticamente zero kcal; óleo, ingredientes e rendimento mudam sua composição. Se consumir caldo, registre a receita/porção real quando disponível. Sem caldo, não há desconto automático de nutrientes.",
     "Recalcule o total se mudar qualquer quantidade, marca ou preparo. As trocas são opções de refeição, não equivalências completas de vitaminas, fibras e minerais.",
     "Planejamento não é consumo confirmado. Este arquivo não contém medições pessoais.",
   );

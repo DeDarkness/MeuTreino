@@ -60,6 +60,7 @@ export type MealEntry = {
   kind: "planned" | "consumed";
   order: number;
   planEntryId?: string;
+  preparationOnly?: boolean;
 };
 export type NutritionDay = {
   date: string;

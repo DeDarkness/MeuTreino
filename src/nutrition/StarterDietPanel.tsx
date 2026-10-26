@@ -1,4 +1,8 @@
 import { useState } from "react";
+import {
+  ActionDialog,
+  type ActionConfirmation,
+} from "../components/ActionDialog";
 import type { Food, NutritionState } from "./types";
 import type { Update } from "./uiHelpers";
 import { dateLabel, display } from "./uiHelpers";
@@ -25,6 +29,9 @@ export function StarterDietPanel({
   const [choices, setChoices] = useState(STARTER_DIET_MEALS.map(() => 0));
   const [setGoal, setSetGoal] = useState(state.goals.kcal === null);
   const [result, setResult] = useState("");
+  const [confirmation, setConfirmation] = useState<ActionConfirmation | null>(
+    null,
+  );
   const preview = starterDietEntries(date, choices, catalog);
   const total = totalNutrients(preview);
   const above = total.kcal > STARTER_DIET_LIMIT;
@@ -69,6 +76,33 @@ export function StarterDietPanel({
       );
     }
   };
+  const confirmReplace = (days: 1 | 7) =>
+    setConfirmation({
+      title:
+        days === 1
+          ? "Atualizar o plano deste dia?"
+          : "Atualizar os próximos sete dias?",
+      message: `De ${dateLabel(date)} a ${dateLabel(offsetDate(date, days - 1))}: substituir somente os itens planejados pelas opções escolhidas aqui. Alimentos já consumidos, medidas, treinos e dias anteriores serão preservados. Uma cópia anterior fica nos Ajustes. Não registre novamente o que já consumiu.`,
+      confirmLabel: "Confirmar atualização do plano",
+      onConfirm: async () => {
+        await change(
+          (current) =>
+            applyStarterDiet(
+              current,
+              date,
+              days,
+              choices,
+              setGoal,
+              catalog,
+              "replace",
+            ),
+          "Antes de atualizar o cardápio planejado",
+        );
+        setResult(
+          `Planejamento atualizado em ${days} dia(s); consumo e histórico preservados.`,
+        );
+      },
+    });
   return (
     <article className="nutrition-card starter-diet">
       <span className="eyebrow">CARDÁPIO PRONTO · TROCAS POR REFEIÇÃO</span>
@@ -133,13 +167,43 @@ export function StarterDietPanel({
                 </select>
               </label>
               <ul>
-                {entries.map((entry) => (
-                  <li key={entry.food.id}>
-                    {display(entry.quantity, 1)} {entry.food.unit} ·{" "}
-                    {entry.food.name}
-                  </li>
-                ))}
+                {entries
+                  .filter((entry) => !entry.preparationOnly)
+                  .map((entry) => (
+                    <li key={entry.food.id}>
+                      {display(entry.quantity, 1)} {entry.food.unit} ·{" "}
+                      {entry.food.name}
+                    </li>
+                  ))}
               </ul>
+              {entries.some((entry) => entry.preparationOnly) ? (
+                <details className="nutrition-preparation">
+                  <summary>
+                    Preparo incluído ·{" "}
+                    {display(
+                      totalNutrients(
+                        entries.filter((entry) => entry.preparationOnly),
+                      ).kcal,
+                    )}{" "}
+                    kcal
+                  </summary>
+                  <p className="elite-caption">
+                    Referência aproximada de temperos e óleo usada no cálculo,
+                    não uma medição da sua panela. Pode ajustar os itens após
+                    aplicar o plano.
+                  </p>
+                  <ul>
+                    {entries
+                      .filter((entry) => entry.preparationOnly)
+                      .map((entry) => (
+                        <li key={entry.food.id}>
+                          {display(entry.quantity)} {entry.food.unit} ·{" "}
+                          {entry.food.name}
+                        </li>
+                      ))}
+                  </ul>
+                </details>
+              ) : null}
               <p className="elite-caption">
                 {options[choices[index]].preparation}
               </p>
@@ -147,11 +211,17 @@ export function StarterDietPanel({
           );
         })}
         <p className="elite-caption">
-          Aromáticos nas refeições principais: 30 g de cebola, 50 g de pimentão
-          e 3 g de alho por porção, já contados. Azeite: 3 ml no almoço + 3 ml
-          no jantar. Páprica, molhos e qualquer óleo extra devem ser registrados
-          pelo rótulo; não são considerados calorias livres. Fibras não
-          disponíveis na tabela: adequação não avaliada.
+          Temperos ficam no preparo, não como acompanhamentos. A referência de
+          óleo e temperos continua contada em “Preparo incluído”; ela não mede
+          sua receita caseira. Ajuste ao que realmente usa e não conte o óleo
+          duas vezes. Fibras não disponíveis na tabela: adequação não avaliada.
+        </p>
+        <p className="nutrition-warning">
+          Frango cozido: pese a carne sem osso/pele, sem o caldo. Pode servir
+          com caldo ou escorrido, mas o peso do caldo não substitui o peso da
+          carne. A composição do caldo depende da receita e do óleo; não é
+          automaticamente zero kcal. Registre a porção/receita real quando
+          disponível. Tirar o caldo não gera um desconto automático.
         </p>
         <p className="elite-caption">
           Whey e iogurte usam referências genéricas; confira suas embalagens em
@@ -200,12 +270,45 @@ export function StarterDietPanel({
         >
           Preencher 7 dias vazios
         </button>
+        {hasPlan ? (
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={above || past}
+            onClick={() => confirmReplace(1)}
+          >
+            Atualizar plano deste dia
+          </button>
+        ) : null}
+        {state.entries.some(
+          (entry) =>
+            entry.kind === "planned" &&
+            entry.date >= date &&
+            entry.date <= offsetDate(date, 6),
+        ) ? (
+          <button
+            className="button button-secondary"
+            type="button"
+            disabled={above || past}
+            onClick={() => confirmReplace(7)}
+          >
+            Atualizar próximos 7 dias
+          </button>
+        ) : null}
       </div>
       <p className="elite-caption">
-        Começa na data selecionada. Não apaga dias planejados, consumo, medidas
-        nem treinos. Planejado não significa comido.
+        Começa na data selecionada. Preencher preserva dias já planejados;
+        Atualizar substitui somente o planejamento do intervalo após
+        confirmação. Consumo, medidas e treinos são preservados. Planejado não
+        significa comido.
       </p>
       {result ? <p role="status">{result}</p> : null}
+      {confirmation ? (
+        <ActionDialog
+          action={confirmation}
+          onClose={() => setConfirmation(null)}
+        />
+      ) : null}
       <p className="elite-caption">
         <a
           href="https://www.gov.br/saude/pt-br/assuntos/saude-brasil/publicacoes-para-promocao-a-saude/guia_alimentar_populacao_brasileira_2ed.pdf"

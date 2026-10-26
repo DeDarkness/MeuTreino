@@ -16,6 +16,7 @@ import {
   CONFIDENCE,
   MEALS,
   consumePlannedEntry,
+  consumePlannedMeal,
   copyNutritionEntries,
   ensureNutritionDay,
   localDate,
@@ -344,113 +345,167 @@ export function NutritionScreen({
                       · {display(totalNutrients(mealEntries).kcal, 0)} kcal
                     </small>
                   </h3>
-                  {mealEntries.map((entry, index) => (
-                    <div className="nutrition-entry" key={entry.id}>
-                      <strong>{entry.food.name}</strong>
-                      <span>
-                        {display(entry.quantity, 2)} {entry.food.unit}
-                        {entry.time ? ` · ${entry.time}` : ""} ·{" "}
-                        {display(
-                          nutrientsFor(entry.food, entry.quantity).kcal,
-                          0,
-                        )}{" "}
-                        kcal
-                      </span>
-                      <small>
-                        {CONFIDENCE[entry.food.confidence]} ·{" "}
-                        {entry.food.preparation}
-                      </small>
-                      <div className="nutrition-entry-actions">
-                        <button type="button" onClick={() => setEditing(entry)}>
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSwapping(entry)}
-                        >
-                          Substituir
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Mover ${entry.food.name} para cima`}
-                          disabled={index === 0}
-                          onClick={() =>
-                            void change((current) => {
-                              const previous = mealEntries[index - 1];
-                              return {
-                                ...current,
-                                entries: current.entries.map((item) =>
-                                  item.id === entry.id
-                                    ? { ...item, order: previous.order }
-                                    : item.id === previous.id
-                                      ? { ...item, order: entry.order }
-                                      : item,
-                                ),
-                              };
-                            }).catch(() => undefined)
-                          }
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void change((current) =>
-                              saveMealEntry(current, {
-                                ...entry,
-                                id: nutritionId(),
-                                planEntryId: undefined,
-                                order: current.entries.length,
-                              }),
-                            ).catch(() => undefined)
-                          }
-                        >
-                          Duplicar
-                        </button>
-                        {entry.kind === "planned" ? (
-                          <button
-                            type="button"
-                            disabled={state.entries.some(
-                              (item) => item.planEntryId === entry.id,
-                            )}
-                            onClick={() =>
-                              void change((current) =>
-                                consumePlannedEntry(current, entry.id),
-                              ).catch(() => undefined)
-                            }
-                          >
-                            <Check size={14} />
-                            {state.entries.some(
-                              (item) => item.planEntryId === entry.id,
-                            )
-                              ? "Consumido"
-                              : "Registrar consumo"}
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="danger"
-                          onClick={() =>
-                            setConfirmation({
-                              title: "Remover este item?",
-                              message:
-                                "A cópia anterior local fica disponível nos Ajustes. Outros registros não serão alterados.",
-                              confirmLabel: "Remover item",
-                              onConfirm: () =>
-                                change((current) => ({
-                                  ...current,
-                                  entries: current.entries.filter(
-                                    (item) => item.id !== entry.id,
-                                  ),
-                                })),
-                            })
-                          }
-                        >
-                          Remover
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  {tab === "plan" ? (
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      disabled={
+                        date > localDate() ||
+                        mealEntries.every((entry) =>
+                          state.entries.some(
+                            (consumed) => consumed.planEntryId === entry.id,
+                          ),
+                        )
+                      }
+                      onClick={() =>
+                        void change((current) =>
+                          consumePlannedMeal(current, date, meal),
+                        ).catch(() => undefined)
+                      }
+                    >
+                      Registrar refeição consumida
+                    </button>
+                  ) : null}
+                  {[false, true].map((preparation) => {
+                    const items = mealEntries.filter(
+                      (entry) => Boolean(entry.preparationOnly) === preparation,
+                    );
+                    if (!items.length) return null;
+                    const content = items.map((entry) => {
+                      const index = mealEntries.indexOf(entry);
+                      return (
+                        <div className="nutrition-entry" key={entry.id}>
+                          <strong>{entry.food.name}</strong>
+                          <span>
+                            {display(entry.quantity, 2)} {entry.food.unit}
+                            {entry.time ? ` · ${entry.time}` : ""} ·{" "}
+                            {display(
+                              nutrientsFor(entry.food, entry.quantity).kcal,
+                              0,
+                            )}{" "}
+                            kcal
+                          </span>
+                          <small>
+                            {CONFIDENCE[entry.food.confidence]} ·{" "}
+                            {entry.food.preparation}
+                          </small>
+                          <div className="nutrition-entry-actions">
+                            <button
+                              type="button"
+                              onClick={() => setEditing(entry)}
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSwapping(entry)}
+                            >
+                              Substituir
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Mover ${entry.food.name} para cima`}
+                              disabled={index === 0}
+                              onClick={() =>
+                                void change((current) => {
+                                  const previous = mealEntries[index - 1];
+                                  return {
+                                    ...current,
+                                    entries: current.entries.map((item) =>
+                                      item.id === entry.id
+                                        ? { ...item, order: previous.order }
+                                        : item.id === previous.id
+                                          ? { ...item, order: entry.order }
+                                          : item,
+                                    ),
+                                  };
+                                }).catch(() => undefined)
+                              }
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void change((current) =>
+                                  saveMealEntry(current, {
+                                    ...entry,
+                                    id: nutritionId(),
+                                    planEntryId: undefined,
+                                    order: current.entries.length,
+                                  }),
+                                ).catch(() => undefined)
+                              }
+                            >
+                              Duplicar
+                            </button>
+                            {entry.kind === "planned" ? (
+                              <button
+                                type="button"
+                                disabled={state.entries.some(
+                                  (item) => item.planEntryId === entry.id,
+                                )}
+                                onClick={() =>
+                                  void change((current) =>
+                                    consumePlannedEntry(current, entry.id),
+                                  ).catch(() => undefined)
+                                }
+                              >
+                                <Check size={14} />
+                                {state.entries.some(
+                                  (item) => item.planEntryId === entry.id,
+                                )
+                                  ? "Consumido"
+                                  : "Registrar consumo"}
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="danger"
+                              onClick={() =>
+                                setConfirmation({
+                                  title: "Remover este item?",
+                                  message:
+                                    "A cópia anterior local fica disponível nos Ajustes. Outros registros não serão alterados.",
+                                  confirmLabel: "Remover item",
+                                  onConfirm: () =>
+                                    change((current) => ({
+                                      ...current,
+                                      entries: current.entries.filter(
+                                        (item) => item.id !== entry.id,
+                                      ),
+                                    })),
+                                })
+                              }
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    });
+                    return preparation ? (
+                      <details
+                        className="nutrition-preparation"
+                        key="preparation"
+                      >
+                        <summary>
+                          Preparo incluído ·{" "}
+                          {display(totalNutrients(items).kcal)} kcal
+                        </summary>
+                        <p className="elite-caption">
+                          Referência estimada de temperos e óleo, não
+                          acompanhamentos separados. Ajuste ao preparo real.
+                          Estes valores continuam incluídos no total. Registrar
+                          a refeição inteira inclui também o preparo; registrar
+                          só um alimento não inclui os demais itens.
+                        </p>
+                        {content}
+                      </details>
+                    ) : (
+                      <div key="main-foods">{content}</div>
+                    );
+                  })}
                 </article>
               );
             })}
@@ -540,6 +595,7 @@ export function NutritionScreen({
                                   time,
                                   order,
                                   kind,
+                                  preparationOnly,
                                 }) => ({
                                   food,
                                   quantity,
@@ -547,6 +603,9 @@ export function NutritionScreen({
                                   time,
                                   order,
                                   kind,
+                                  ...(preparationOnly !== undefined
+                                    ? { preparationOnly }
+                                    : {}),
                                 }),
                               ),
                             },

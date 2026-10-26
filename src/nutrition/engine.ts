@@ -282,6 +282,26 @@ export function copyNutritionEntries(
     });
   return next;
 }
+export function consumePlannedMeal(
+  state: NutritionState,
+  date: string,
+  meal: string,
+) {
+  const pending = state.entries.filter(
+    (entry) =>
+      entry.kind === "planned" &&
+      entry.date === date &&
+      entry.meal === meal &&
+      !state.entries.some((consumed) => consumed.planEntryId === entry.id),
+  );
+  if (!pending.length)
+    throw new Error(
+      "Esta refeição já foi registrada ou não tem itens planejados.",
+    );
+  let next = state;
+  for (const entry of pending) next = consumePlannedEntry(next, entry.id);
+  return next;
+}
 export function shoppingList(entries: MealEntry[], start: string, end: string) {
   const items = new Map<
     string,
