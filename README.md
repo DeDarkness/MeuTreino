@@ -4,6 +4,10 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 
 ## Recursos
 
+### Elite 8.0 — alimentação integrada
+
+Diário alimentar, planejamento por data, substituições no mesmo grupo com diferenças de nutrientes, catálogo aproximado de 345 alimentos, cadastro por fonte/rótulo, favoritos/modelos, lista de compras, metas manuais, água/sono, medidas corporais, pré-operatório e relatórios CSV/impressão PDF. Sem prescrição automática ou dados pessoais embutidos no código público. O catálogo fornecido é explicitamente **não verificado**; fibras desconhecidas não viram zero. Backup completo inclui o novo módulo sem apagar os treinos ou as reposições; backup antigo de treinos preserva a alimentação atual. Wallpaper passou para Ajustes. Veja [recursos, limites, fontes e migração da 8.0](RELEASE_NOTES_8_0.md).
+
 ### Elite 7.2 — encerrar agora, escolher a reposição depois
 
 Encerre a sessão quando quiser, inclusive sem séries concluídas. Só séries realmente feitas entram no histórico; as restantes (inclusive exercícios pulados) ficam em **Início → Reposição da semana**, separadas pela semana local de origem, de segunda a domingo. Escolha os exercícios e a quantidade de séries para outro dia, inclusive sábado/domingo. A ficha normal continua com **22/23/21 séries, 66 semanais**; não há aumento automático nem obrigação de compensar tudo.

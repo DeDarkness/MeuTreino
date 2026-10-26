@@ -12,12 +12,16 @@ import { formatDate, greeting, todayLabel } from '../lib/format';
 import { WeeklyDashboard } from '../components/WeeklyDashboard';
 import { RecoveryPanel } from '../components/RecoveryPanel';
 import { localWeekKey } from '../lib/recovery';
+import { NutritionSummary } from '../nutrition/NutritionSummary';
+import type { NutritionState } from '../nutrition/types';
 import { getSuggestedPlanId } from '../lib/starterPlans';
 import { plannedSets } from '../lib/trainingModes';
 import type { ActiveWorkout, Exercise, RecoveryItem, RecoverySelection, WorkoutHistory, WorkoutPlan } from '../types';
 
 type HomeScreenProps = {
   plans: WorkoutPlan[];
+  nutrition?: NutritionState;
+  onOpenNutrition?: () => void;
   history: WorkoutHistory[];
   activeWorkout: ActiveWorkout | null;
   recoveryItems: RecoveryItem[];
@@ -40,6 +44,8 @@ const WORKOUT_DAYS = [
 
 export function HomeScreen({
   plans,
+  nutrition,
+  onOpenNutrition,
   history,
   activeWorkout,
   recoveryItems,
@@ -86,7 +92,7 @@ export function HomeScreen({
     <section className="screen home-screen home-screen--premium" aria-labelledby="home-title">
       <header className="screen-heading home-heading">
         <div>
-          <span className="elite-release-badge">MEUTREINO <b>ELITE 7</b></span>
+          <span className="elite-release-badge">MEUTREINO <b>ELITE 8</b></span>
           <p className="eyebrow">{todayLabel()}</p>
           <h1 id="home-title">{greeting()} 👋</h1>
           <p>Qual treino vamos encarar hoje?</p>
@@ -107,6 +113,8 @@ export function HomeScreen({
           </button>
         </article>
       ) : null}
+
+      {nutrition && onOpenNutrition ? <NutritionSummary state={nutrition} onOpen={onOpenNutrition} /> : null}
 
       {availableDays.length > 0 ? (
         <section className="day-picker" aria-labelledby="day-picker-title">

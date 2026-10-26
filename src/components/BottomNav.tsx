@@ -1,6 +1,6 @@
-import { Dumbbell, House, Image as ImageIcon, Settings, TrendingUp } from 'lucide-react';
+import { Apple, Dumbbell, House, Settings, TrendingUp } from 'lucide-react';
 
-export type AppTab = 'home' | 'plans' | 'history' | 'wallpaper' | 'settings';
+export type AppTab = 'home' | 'plans' | 'history' | 'wallpaper' | 'settings' | 'nutrition';
 
 type BottomNavProps = {
   activeTab: AppTab | null;
@@ -10,8 +10,8 @@ type BottomNavProps = {
 const items = [
   { id: 'home' as const, label: 'Hoje', icon: House },
   { id: 'plans' as const, label: 'Treinos', icon: Dumbbell },
+  { id: 'nutrition' as const, label: 'Alimentação', icon: Apple },
   { id: 'history' as const, label: 'Evolução', icon: TrendingUp },
-  { id: 'wallpaper' as const, label: 'Wallpaper', icon: ImageIcon },
   { id: 'settings' as const, label: 'Ajustes', icon: Settings },
 ];
 

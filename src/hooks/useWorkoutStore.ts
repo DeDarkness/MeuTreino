@@ -33,8 +33,11 @@ import type { AppState, Preferences, RecoverySelection, WorkoutHistory, WorkoutP
 import { discardRecoveryItem } from '../lib/recovery';
 import { syncPushRest } from '../lib/pushNotifications';
 import { applyPreSurgicalProtocol, upgradeEliteProtocol } from '../lib/starterPlans';
+import type { NutritionState } from '../nutrition/types';
+import { emptyNutrition } from '../nutrition/engine';
 
 export interface WorkoutStoreActions {
+  updateNutrition(change: (current: NutritionState) => NutritionState, checkpoint?: string): Promise<void>;
   savePlan(input: WorkoutPlanInput): Promise<WorkoutPlan>;
   deletePlan(planId: string): Promise<void>;
   duplicatePlan(planId: string): Promise<WorkoutPlan>;
@@ -192,6 +195,10 @@ export function useWorkoutStore(): WorkoutStore {
     state: queueMissedWorkoutPlan(current, planId), result: undefined,
   }), 'Antes de registrar ficha não realizada'), [commitDurable]);
 
+  const updateNutrition = useCallback((change: (current: NutritionState) => NutritionState, checkpoint = 'Antes de alterar Alimentação') => commitDurable((current) => ({
+    state: { ...current, nutrition: change(structuredClone(current.nutrition ?? emptyNutrition())), updatedAt: new Date().toISOString() }, result: undefined,
+  }), checkpoint), [commitDurable]);
+
   const savePlan = useCallback((input: WorkoutPlanInput) =>
     commit((current) => {
       const changed = saveWorkoutPlan(current, input);
@@ -314,6 +321,7 @@ export function useWorkoutStore(): WorkoutStore {
       ...seeded,
       plans: [],
       history: [],
+      nutrition: emptyNutrition(),
       activeWorkout: null,
     };
     stateRef.current = empty;
@@ -329,6 +337,7 @@ export function useWorkoutStore(): WorkoutStore {
   const clearError = useCallback(() => setError(null), []);
 
   const actions = useMemo<WorkoutStoreActions>(() => ({
+    updateNutrition,
     savePlan,
     deletePlan,
     duplicatePlan,
@@ -355,6 +364,7 @@ export function useWorkoutStore(): WorkoutStore {
     clearData,
     installPreSurgicalProtocol,
   }), [
+    updateNutrition,
     abandonWorkout,
     addRestSeconds,
     clearData,

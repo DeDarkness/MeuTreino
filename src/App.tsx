@@ -24,6 +24,9 @@ import { PlansScreen } from './screens/PlansScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { WallpaperScreen } from './screens/WallpaperScreen';
 import type { ActiveWorkoutSet, WorkoutHistory, WorkoutPlan } from './types';
+import { NutritionScreen } from './nutrition/NutritionScreen';
+import { BodyPanel } from './nutrition/BodyPanel';
+import { emptyNutrition } from './nutrition/engine';
 
 type NavigatorWithStandalone = Navigator & { standalone?: boolean };
 
@@ -270,6 +273,8 @@ export default function App() {
         {activeTab === 'home' ? (
           <HomeScreen
             plans={state.plans}
+            nutrition={state.nutrition}
+            onOpenNutrition={() => setActiveTab('nutrition')}
             history={state.history}
             activeWorkout={activeWorkout}
             recoveryItems={state.recoveryItems ?? []}
@@ -298,14 +303,17 @@ export default function App() {
           />
         ) : null}
 
-        {activeTab === 'history' ? (
+        {activeTab === 'nutrition' ? <NutritionScreen state={state.nutrition ?? emptyNutrition()} update={store.updateNutrition} history={state.history} /> : null}
+
+        {activeTab === 'history' ? <>
+          <section className="nutrition-screen"><BodyPanel state={state.nutrition ?? emptyNutrition()} change={store.updateNutrition} /></section>
           <HistoryScreen
             history={state.history}
             plans={state.plans}
             weightUnit={state.preferences.weightUnit}
             onDelete={(id) => runAction(store.deleteHistory(id))}
           />
-        ) : null}
+        </> : null}
 
         {activeTab === 'wallpaper' ? (
           <WallpaperScreen
@@ -319,6 +327,8 @@ export default function App() {
         ) : null}
 
         {activeTab === 'settings' ? (
+          <>
+          <button className="button button-secondary button-wide" type="button" onClick={() => setActiveTab('wallpaper')}>Wallpaper · fotos e vídeos animados</button>
           <SettingsScreen
             preferences={state.preferences}
             isStandalone={isStandalone}
@@ -336,6 +346,7 @@ export default function App() {
             pushStatus={pushStatus}
             onNotificationPermissionChange={() => setNotificationPermission(getRestNotificationPermission())}
           />
+          </>
         ) : null}
       </main>
 

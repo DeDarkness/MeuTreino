@@ -13,6 +13,8 @@ import {
 } from '../types';
 import { createWeeklyWorkoutPlans, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION, ELITE_PROTOCOL_VERSION, upgradeEliteProtocol } from './starterPlans';
 import { isWeekKey, MAX_RECOVERY_SETS, MAX_RECOVERY_SETS_PER_EXERCISE, MAX_SAVED_RECOVERY_ITEMS } from './recovery';
+import { emptyNutrition } from '../nutrition/engine';
+import { validateNutrition } from '../nutrition/validation';
 
 const DATABASE_NAME = 'meutreino';
 const DATABASE_VERSION = 2;
@@ -408,6 +410,9 @@ export function validateAppState(value: unknown): AppState {
   if (value.activeWorkout !== null) validateActiveWorkout(value.activeWorkout, 'activeWorkout', issues);
   validateRecoveryState(value, issues);
   validatePreferences(value.preferences, 'preferences', issues);
+  if (value.nutrition !== undefined) {
+    try { validateNutrition(value.nutrition); } catch (cause) { issues.push(cause instanceof Error ? cause.message : 'Alimentação inválida'); }
+  }
   if (!isIsoDate(value.updatedAt)) issues.push('updatedAt deve ser uma data válida');
 
   if (issues.length > 0) throw new DatabaseValidationError(issues);
@@ -425,6 +430,7 @@ export function createSeedState(now = new Date().toISOString()): AppState {
     eliteProtocolVersion: ELITE_PROTOCOL_VERSION,
     plans: createWeeklyWorkoutPlans(now),
     history: [],
+    nutrition: emptyNutrition(),
     recoveryItems: [],
     queuedMissedPlans: [],
     activeWorkout: null,
@@ -565,12 +571,15 @@ export async function loadState(): Promise<AppState> {
     const stored = await readRecord(database);
     if (stored) {
       const validated = validateAppState(stored.value);
-      const upgraded = upgradeEliteProtocol(installWeeklyWorkoutPlans(validated));
-      if (upgraded !== validated) await writeRecord(database, upgraded, 'Antes da atualização das fichas');
+      let upgraded = upgradeEliteProtocol(installWeeklyWorkoutPlans(validated));
+      if (upgraded.nutrition === undefined) {
+        upgraded = { ...upgraded, nutrition: emptyNutrition() };
+      }
+      if (upgraded !== validated) await writeRecord(database, upgraded, validated.nutrition === undefined ? 'Antes de ativar Alimentação v1' : 'Antes da atualização das fichas');
       return cloneState(upgraded);
     }
 
-    const seeded = createSeedState();
+    const seeded = { ...createSeedState(), nutrition: emptyNutrition() };
     await writeRecord(database, seeded);
     return cloneState(seeded);
   } finally {
@@ -631,7 +640,13 @@ export async function importState(source: string | unknown): Promise<AppState> {
     candidate = parsed.state;
   }
 
-  return saveState(validateAppState(candidate), 'Antes da importação ou troca de protocolo');
+  let imported = validateAppState(candidate);
+  // A training-only legacy backup must not silently erase the newer nutrition journal.
+  if (imported.nutrition === undefined) {
+    const existing = await loadState();
+    imported = { ...imported, nutrition: existing.nutrition ?? emptyNutrition() };
+  }
+  return saveState(imported, 'Antes da importação ou troca de protocolo');
 }
 
 export async function readSafetySnapshot(): Promise<{ value: AppState; label: string; createdAt: string } | null> {

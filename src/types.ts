@@ -1,3 +1,5 @@
+import type { NutritionState } from './nutrition/types';
+
 export const APP_STATE_SCHEMA_VERSION = 1 as const;
 
 export type IsoDateString = string;
@@ -156,6 +158,8 @@ export interface AppState {
   eliteProtocolVersion?: number;
   plans: WorkoutPlan[];
   history: WorkoutHistory[];
+  /** Optional versioned module; old backups and active training sessions remain compatible. */
+  nutrition?: NutritionState;
   recoveryItems?: RecoveryItem[];
   /** Current-week anti-duplication ledger, including sessions ended with zero sets. */
   queuedMissedPlans?: string[];

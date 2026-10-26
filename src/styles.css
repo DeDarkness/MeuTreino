@@ -37,7 +37,7 @@ html {
 }
 
 body {
-  min-width: 320px;
+  min-width: 280px;
   min-height: 100%;
   margin: 0;
   overscroll-behavior-y: none;
