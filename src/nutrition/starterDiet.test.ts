@@ -40,12 +40,12 @@ describe("cardápio pronto até 1.700 kcal", () => {
         .reduce((sum, entry) => sum + entry.quantity, 0),
     ).toBe(6);
   });
-  it("todas as 225 combinações respeitam o teto, sem frango no café/lanche e com doses de 15 g whey", () => {
+  it("todas as 504 combinações respeitam o teto, sem frango no café/lanche e com doses de 15 g whey", () => {
     let count = 0;
-    for (let a = 0; a < 5; a++)
-      for (let b = 0; b < 3; b++)
-        for (let c = 0; c < 5; c++)
-          for (let d = 0; d < 3; d++) {
+    for (let a = 0; a < STARTER_DIET_MEALS[0].options.length; a++)
+      for (let b = 0; b < STARTER_DIET_MEALS[1].options.length; b++)
+        for (let c = 0; c < STARTER_DIET_MEALS[2].options.length; c++)
+          for (let d = 0; d < STARTER_DIET_MEALS[3].options.length; d++) {
             const entries = starterDietEntries(today, [a, b, c, d]);
             const total = totalNutrients(entries);
             expect(total.kcal).toBeLessThanOrEqual(1700);
@@ -68,7 +68,7 @@ describe("cardápio pronto até 1.700 kcal", () => {
             ).toBe(true);
             count++;
           }
-    expect(count).toBe(225);
+    expect(count).toBe(504);
     expect(STARTER_DIET_MEALS).toHaveLength(4);
   });
   it("aplica sete dias somente planejados, com meta não validada opcional e backup compatível", () => {
@@ -281,5 +281,41 @@ describe("cardápio pronto até 1.700 kcal", () => {
       applyStarterDiet(state, today, 7, defaults, false, catalog, "replace"),
     ).toThrow("ultrapassa");
     expect(state).toEqual(original);
+  });
+  it("inclui leite e requeijão com unidades e rótulos distintos, sem adicionar leite duas vezes", () => {
+    const milkBreakfast = starterDietEntries(today, [5, 0, 0, 0]).filter(
+      (entry) => entry.meal === "Café da manhã",
+    );
+    expect(
+      milkBreakfast.find((entry) => entry.food.name === "Leite desnatado (ml)"),
+    ).toMatchObject({ quantity: 150, food: { unit: "ml" } });
+    expect(
+      milkBreakfast.filter((entry) => entry.food.name.startsWith("Leite")),
+    ).toHaveLength(1);
+    expect(
+      milkBreakfast.find((entry) => entry.food.name.startsWith("Whey"))
+        ?.quantity,
+    ).toBe(15);
+    expect(
+      milkBreakfast.find((entry) => entry.food.name === "Requeijao light")
+        ?.quantity,
+    ).toBe(15);
+    const wholeMilkBreakfast = starterDietEntries(today, [6, 0, 0, 0]).filter(
+      (entry) => entry.meal === "Café da manhã",
+    );
+    expect(
+      wholeMilkBreakfast.some(
+        (entry) => entry.food.name === "Leite integral (ml)",
+      ),
+    ).toBe(true);
+    expect(
+      wholeMilkBreakfast.some(
+        (entry) => entry.food.name === "Requeijao tradicional",
+      ),
+    ).toBe(true);
+    expect(totalNutrients(wholeMilkBreakfast).kcal).toBeCloseTo(386.32, 2);
+    expect(starterDietText(today, [7, 0, 6, 0])).toContain(
+      "Leite semidesnatado",
+    );
   });
 });

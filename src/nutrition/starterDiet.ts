@@ -103,6 +103,41 @@ export const STARTER_DIET_MEALS: { meal: string; options: MealOption[] }[] = [
         preparation:
           "Mesma crepioca-base, mas com 25 g de muçarela tradicional, não light. Banana e 15 g de whey com água à parte. As calorias e os macros são recalculados; confira o rótulo da sua marca.",
       },
+      {
+        name: "Pão com ovo e requeijão + leite, whey e banana",
+        ingredients: [
+          [bread, 40],
+          [eggs, 50],
+          ["Requeijao light", 15],
+          ["Leite desnatado (ml)", 150],
+          [whey, 15],
+          [banana, 60],
+        ],
+        preparation:
+          "40 g de pão integral, cerca de 1 ovo (50 g sem casca), 15 g de requeijão light e 60 g de banana. Misture 15 g de whey em pó nos 150 ml de leite desnatado já contabilizados, sem acrescentar mais leite. O leite substitui a água desta opção, não é um extra livre. Sem manteiga ou açúcar não registrados.",
+      },
+      {
+        name: "Sanduíche com requeijão tradicional + leite integral",
+        ingredients: [
+          [bread, 40],
+          [eggs, 100],
+          ["Requeijao tradicional", 15],
+          ["Leite integral (ml)", 150],
+        ],
+        preparation:
+          "40 g de pão integral, cerca de 2 ovos (100 g sem casca), 15 g de requeijão tradicional e 150 ml de leite integral. Esta opção não tem whey no café nem fruta adicional contabilizada. O leite integral e o requeijão tradicional já entram no total; não troque por quantidades maiores sem recalcular.",
+      },
+      {
+        name: "Pão, ovos e requeijão + leite semidesnatado",
+        ingredients: [
+          [bread, 50],
+          [eggs, 100],
+          ["Requeijao light", 15],
+          ["Leite semidesnatado (ml)", 150],
+        ],
+        preparation:
+          "50 g de pão integral, cerca de 2 ovos (100 g sem casca), 15 g de requeijão light e 150 ml de leite semidesnatado. Sem whey nesta opção. Confira as embalagens e não acrescente manteiga, açúcar ou mais leite sem registrar.",
+      },
     ],
   },
   {
@@ -198,6 +233,30 @@ export const STARTER_DIET_MEALS: { meal: string; options: MealOption[] }[] = [
         ],
         preparation:
           "Misture 170 g de iogurte desnatado, 15 g de aveia pura, 15 g de whey em pó e 65 g de banana sem casca. Pode hidratar na geladeira; não acrescente mel, leite ou granola sem registrar. Confira o rótulo se usar farinha de aveia comprada.",
+      },
+      {
+        name: "Sanduíche de ovo e requeijão + leite",
+        ingredients: [
+          [bread, 40],
+          [eggs, 50],
+          ["Requeijao light", 20],
+          ["Tomate cru", 50],
+          ["Leite desnatado (ml)", 100],
+        ],
+        preparation:
+          "40 g de pão integral, cerca de 1 ovo (50 g sem casca), 20 g de requeijão light, 50 g de tomate e 100 ml de leite desnatado. Sem frango nem whey nesta opção. Leite e requeijão estão contados; não acrescente outra porção por fora.",
+      },
+      {
+        name: "Sanduíche de queijo e requeijão + leite",
+        ingredients: [
+          [bread, 40],
+          [cheese, 25],
+          ["Requeijao tradicional", 15],
+          ["Tomate cru", 50],
+          ["Leite desnatado (ml)", 150],
+        ],
+        preparation:
+          "40 g de pão integral, 25 g de muçarela light, 15 g de requeijão tradicional, 50 g de tomate e 150 ml de leite desnatado. Sem ovos, frango ou whey nesta opção. Leite integral ou mais queijo mudam as calorias; recalcule antes de trocar.",
       },
     ],
   },
