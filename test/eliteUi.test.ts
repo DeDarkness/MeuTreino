@@ -32,6 +32,7 @@ describe('interface Elite e controles de integridade', () => {
     }));
     expect(html).not.toContain('Express');
     expect(html).not.toContain('Duração do treino');
+    expect(html).not.toContain('Dia D');
     expect(html).toContain('Iniciar');
   });
   it('não permite recarregar por atualização com uma sessão ativa', () => {
@@ -54,10 +55,21 @@ describe('interface Elite e controles de integridade', () => {
       items: pending.recoveryItems!, activeWorkout: null, onStart: async () => undefined, onDiscard: () => undefined,
     }));
     expect(html).toContain('22 séries pendentes');
+    expect(html).toContain('Dia D · Pendências da semana');
     expect(html).toContain('0 séries selecionadas');
     expect(html).toContain('Não são metas nem indicação de volume');
     expect(html).toContain('Séries a repor de Hack squat');
     expect(html).not.toContain('Express');
     expect(pending.history).toEqual([]);
+  });
+  it('separa as pendências antigas quando não há Dia D na semana atual', () => {
+    const seed = createSeedState('2026-10-19T19:00:00.000Z');
+    const start = startWorkoutFromPlan(seed, seed.plans[0].id, '2026-10-19T19:00:00.000Z').state;
+    const pending = finishActiveWorkout(start, new Date('2026-10-19T20:00:00.000Z')).state;
+    const html = renderToStaticMarkup(createElement(RecoveryPanel, {
+      items: pending.recoveryItems!, currentWeek: '2026-10-26', activeWorkout: null, onStart: async () => undefined, onDiscard: () => undefined,
+    }));
+    expect(html).toContain('Pendências anteriores');
+    expect(html).not.toContain('Dia D');
   });
 });

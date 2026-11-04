@@ -4,7 +4,7 @@ import type { AppState, RecoveryItem, RecoverySelection } from '../types';
 import { createSeedState, exportState, importState, loadState, readSafetySnapshot, saveState, validateAppState } from './database';
 import { chooseRecoveryItems, discardRecoveryItem, isWeekKey, localWeekKey, MAX_SAVED_RECOVERY_ITEMS, recoveryByMuscle, remainingSetCount, savedRecoverySets } from './recovery';
 import { weeklyInsights } from './weeklyInsights';
-import { completeActiveSet, deferActiveExercise, finishActiveWorkout, moveActiveExercise, queueMissedWorkoutPlan, startRecoveryWorkout, startWorkoutFromPlan, toggleSkipActiveExercise, updateActiveSet } from './workout';
+import { completeActiveSet, deferActiveExercise, finishActiveWorkout, moveActiveExercise, queueAutomaticFullBodyMisses, queueMissedWorkoutPlan, startRecoveryWorkout, startWorkoutFromPlan, toggleSkipActiveExercise, updateActiveSet } from './workout';
 
 const monday = new Date(2026, 9, 19, 19).toISOString();
 const saturday = new Date(2026, 9, 24, 19).toISOString();
@@ -22,6 +22,72 @@ const choices = (state: AppState, itemIndex = 0, count = 2): RecoverySelection[]
 const queue = () => finish(begin());
 beforeEach(() => vi.stubGlobal('indexedDB', new IDBFactory()));
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+describe('Dia D automático', () => {
+  const tuesday = new Date(2026, 9, 20, 8);
+  const finishPlan = (state: AppState, planId: string, date: Date) => {
+    const started = startWorkoutFromPlan(state, planId, date.toISOString()).state;
+    for (const exercise of started.activeWorkout!.exercises) for (const set of exercise.sets) {
+      set.completed = true;
+      set.completedAt = date.toISOString();
+    }
+    return finish(started, date.toISOString());
+  };
+  it('espera o dia acabar e cria somente a ficha perdida, sem lançar treino realizado', () => {
+    const before = seed();
+    expect(queueAutomaticFullBodyMisses(before, new Date(2026, 9, 19, 23, 59))).toBe(before);
+    const next = queueAutomaticFullBodyMisses(before, tuesday);
+    expect(savedRecoverySets(next.recoveryItems!)).toBe(22);
+    expect(next.recoveryItems!.every((item) => item.automaticMiss && item.sourcePlanId === before.plans[0].id)).toBe(true);
+    expect(next.history).toEqual([]);
+    expect(next.plans).toEqual(before.plans);
+    expect(queueAutomaticFullBodyMisses(next, tuesday)).toBe(next);
+    expect(() => validateAppState(next)).not.toThrow();
+  });
+  it('não inventa atrasos para fichas criadas após o dia nem busca semanas anteriores', () => {
+    const fresh = createSeedState(tuesday.toISOString());
+    expect(queueAutomaticFullBodyMisses(fresh, tuesday)).toBe(fresh);
+    const before = seed();
+    expect(queueAutomaticFullBodyMisses(before, new Date(2026, 9, 26, 9))).toBe(before);
+  });
+  it('não cria falta enquanto há treino em andamento e não duplica pendências parciais', () => {
+    const active = begin();
+    expect(queueAutomaticFullBodyMisses(active, tuesday)).toBe(active);
+    const partial = finish(mark(active), tuesday.toISOString());
+    expect(queueAutomaticFullBodyMisses(partial, tuesday)).toBe(partial);
+    expect(savedRecoverySets(partial.recoveryItems!)).toBe(21);
+  });
+  it('não cria Dia D quando todas as fichas da semana já foram concluídas', () => {
+    let state = seed();
+    for (const [index, plan] of state.plans.entries()) state = finishPlan(state, plan.id, new Date(2026, 9, 19 + index * 2, 19));
+    expect(state.recoveryItems).toEqual([]);
+    expect(queueAutomaticFullBodyMisses(state, new Date(saturday))).toBe(state);
+  });
+  it('abate séries feitas em uma ficha atrasada sem duplicar ou recriar séries dispensadas', () => {
+    const queued = queueAutomaticFullBodyMisses(seed(), tuesday);
+    const dismissed = discardRecoveryItem(queued, queued.recoveryItems![1].id);
+    const plan = dismissed.plans[0];
+    const late = startWorkoutFromPlan(dismissed, plan.id, tuesday.toISOString()).state;
+    const exercise = late.activeWorkout!.exercises[0];
+    const marked = completeActiveSet(late, exercise.exerciseId, exercise.sets[0].id, tuesday);
+    const partial = finish(marked, tuesday.toISOString());
+    expect(savedRecoverySets(partial.recoveryItems!)).toBe(savedRecoverySets(dismissed.recoveryItems!) - 1);
+    expect(partial.history[0].exercises[0].sets).toHaveLength(1);
+    const completed = finishPlan(partial, plan.id, tuesday);
+    expect(completed.recoveryItems).toEqual([]);
+    expect(queueAutomaticFullBodyMisses(completed, tuesday)).toBe(completed);
+  });
+  it('consome o último item ao concluir o Dia D e não recria falta descartada', () => {
+    const queued = queueAutomaticFullBodyMisses(seed(), tuesday);
+    const only = queued.recoveryItems![0];
+    const remaining = { ...queued, recoveryItems: [{ ...only, exercise: { ...only.exercise, sets: only.exercise.sets.slice(0, 1) } }] };
+    const active = startRecoveryWorkout(remaining, choices(remaining), tuesday.toISOString()).state;
+    const ended = finish(mark(active), tuesday.toISOString());
+    expect(ended.history[0].planName).toBe('Dia D · Reposição');
+    expect(ended.recoveryItems).toEqual([]);
+    expect(queueAutomaticFullBodyMisses(ended, tuesday)).toBe(ended);
+  });
+});
 
 describe('encerramento flexível e origem das pendências', () => {
   it('encerra sem nenhuma série, sem inventar histórico, e guarda a ficha toda', () => {

@@ -30,3 +30,5 @@
 .recovery-dialog > p:not(.eyebrow) { font-size: 15px; line-height: 1.7; }
 .recovery-dialog .button { margin-top: 12px; white-space: normal; }
 @media (max-width: 380px) { .recovery-panel { padding: 17px; } .recovery-discard span { display: none; } .recovery-discard { min-width: 44px; } }
+.day-picker__recovery { margin-top: 10px; color: var(--text); text-decoration: none; }
+#weekly-recovery { scroll-margin-top: 16px; }

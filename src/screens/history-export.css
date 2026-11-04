@@ -1,0 +1,19 @@
+.history-selection {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line, #344138);
+  border-radius: 16px;
+  background: var(--surface, #141c16);
+  scroll-margin-top: 16px;
+}
+.history-selection p, .history-pdf-actions p { margin: 0; }
+.history-pdf-actions { display: grid; gap: 10px; }
+.history-export-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.history-export-buttons .button { flex: 1 1 135px; min-height: 44px; padding-inline: 10px; }
+.history-card-selection-row { display: flex; align-items: stretch; }
+.history-card-selection-row .history-card-summary { flex: 1; min-width: 0; }
+.history-card-check { display: grid; place-items: center; width: 48px; flex: 0 0 48px; min-height: 44px; cursor: pointer; }
+.history-card-check input { margin: 0; width: 20px; height: 20px; accent-color: var(--accent, #a9ef35); }
+.history-card--selected { outline: 1px solid var(--accent, #a9ef35); outline-offset: -1px; }
+.history-export-jump { color: var(--text); text-decoration: none; }

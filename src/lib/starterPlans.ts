@@ -3,6 +3,12 @@ import type { AppState, Exercise, WorkoutPlan, MuscleGroup } from '../types';
 export const STARTER_PLAN_VERSION = 2 as const;
 export const ELITE_PROTOCOL_VERSION = 3 as const;
 
+export const FULL_BODY_DAYS = [
+  { planId: 'plan-full-body-a', short: 'SEG', label: 'Segunda', workout: 'A', offset: 0 },
+  { planId: 'plan-full-body-b', short: 'QUA', label: 'Quarta', workout: 'B', offset: 2 },
+  { planId: 'plan-full-body-c', short: 'SEX', label: 'Sexta', workout: 'C', offset: 4 },
+] as const;
+
 const PLAN_BY_WEEKDAY = [
   'plan-full-body-a',
   'plan-full-body-a',

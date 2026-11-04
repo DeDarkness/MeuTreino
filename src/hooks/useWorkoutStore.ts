@@ -22,6 +22,8 @@ import {
   startWorkoutFromPlan,
   startRecoveryWorkout,
   queueMissedWorkoutPlan,
+  missedFullBodyPlans,
+  queueAutomaticFullBodyMisses,
   toggleSkipActiveExercise,
   uncompleteActiveSet,
   updateActiveSet,
@@ -30,7 +32,7 @@ import {
   type WorkoutPlanInput,
 } from '../lib/workout';
 import type { AppState, Preferences, RecoverySelection, WorkoutHistory, WorkoutPlan } from '../types';
-import { discardRecoveryItem } from '../lib/recovery';
+import { discardRecoveryItem, localWeekKey } from '../lib/recovery';
 import { syncPushRest } from '../lib/pushNotifications';
 import { applyPreSurgicalProtocol, upgradeEliteProtocol } from '../lib/starterPlans';
 import type { NutritionState } from '../nutrition/types';
@@ -67,6 +69,7 @@ export interface WorkoutStoreActions {
 
 export interface WorkoutStore extends WorkoutStoreActions {
   state: AppState | null;
+  calendarWeek: string;
   loading: boolean;
   error: string | null;
   saving: boolean;
@@ -80,6 +83,7 @@ const errorMessage = (error: unknown): string =>
 
 export function useWorkoutStore(): WorkoutStore {
   const [state, setState] = useState<AppState | null>(null);
+  const [calendarWeek, setCalendarWeek] = useState(localWeekKey);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -163,7 +167,7 @@ export function useWorkoutStore(): WorkoutStore {
     commit((current) => ({ state: change(current), result: undefined }), checkpointLabel), [commit]);
 
   // Queue consumption and session closure must not appear successful before disk commits.
-  const commitDurable = useCallback(async <T,>(change: (current: AppState) => { state: AppState; result: T }, label: string): Promise<T> => {
+  const commitDurable = useCallback(async <T,>(change: (current: AppState) => { state: AppState; result: T }, label?: string): Promise<T> => {
     if (importingRef.current) throw new Error('Aguarde a gravação ou importação terminar.');
     importingRef.current = true;
     try {
@@ -171,6 +175,7 @@ export function useWorkoutStore(): WorkoutStore {
       const current = stateRef.current;
       if (!current) throw new Error('Os dados ainda estão carregando.');
       const changed = change(current);
+      if (changed.state === current) return changed.result;
       validateAppState(changed.state);
       await enqueueSave(changed.state, label);
       stateRef.current = changed.state;
@@ -182,6 +187,31 @@ export function useWorkoutStore(): WorkoutStore {
       throw cause;
     } finally { importingRef.current = false; }
   }, [enqueueSave]);
+
+  useEffect(() => {
+    if (!state) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const reconcile = () => {
+      clearTimeout(timer);
+      const now = new Date();
+      setCalendarWeek(localWeekKey(now));
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 1, 0);
+      timer = setTimeout(reconcile, midnight.getTime() - now.getTime());
+      const current = stateRef.current;
+      if (document.hidden || importingRef.current || !current || !missedFullBodyPlans(current, now).length) return;
+      // This is additive bookkeeping, so do not replace the user's safety checkpoint.
+      void commitDurable((latest) => ({ state: queueAutomaticFullBodyMisses(latest, now), result: undefined })).catch(() => undefined);
+    };
+    timer = setTimeout(reconcile, 0);
+    window.addEventListener('focus', reconcile);
+    document.addEventListener('visibilitychange', reconcile);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('focus', reconcile);
+      document.removeEventListener('visibilitychange', reconcile);
+    };
+  }, [state, commitDurable]);
 
   const startRecovery = useCallback((selections: RecoverySelection[]) => commitDurable((current) => ({
     state: startRecoveryWorkout(current, selections).state, result: undefined,
@@ -392,5 +422,5 @@ export function useWorkoutStore(): WorkoutStore {
     selectSet,
   ]);
 
-  return { state, loading, error, saving, clearError, ...actions };
+  return { state, calendarWeek, loading, error, saving, clearError, ...actions };
 }

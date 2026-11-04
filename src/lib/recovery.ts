@@ -34,6 +34,17 @@ export function savedRecoverySets(items: RecoveryItem[]): number {
   return items.reduce((sum, item) => sum + item.exercise.sets.length, 0);
 }
 
+export function hasWeeklyPlanRecord(state: Pick<AppState, 'history' | 'queuedMissedPlans' | 'recoveryItems'>, planId: string, week: string) {
+  return Boolean(state.queuedMissedPlans?.includes(`${week}::${planId}`)
+    || state.recoveryItems?.some((item) => item.sourcePlanId === planId && item.weekStart === week)
+    || state.history.some((item) => item.planId === planId && localWeekKey(new Date(item.startedAt)) === week
+      || item.recoveryWeekStart === week && item.recoverySourcePlanIds?.includes(planId)));
+}
+
+export function isAutomaticMissFor(item: RecoveryItem, planId: string | null, week: string) {
+  return item.automaticMiss === true && item.sourcePlanId === planId && item.weekStart === week;
+}
+
 export function recoveryByMuscle(items: RecoveryItem[]) {
   const totals = new Map<MuscleGroup, number>();
   for (const item of items) if (item.exercise.muscleGroup) {

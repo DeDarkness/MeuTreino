@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  CalendarClock,
   Dumbbell,
   Flame,
   Play,
@@ -11,15 +12,16 @@ import { useMemo, useState } from 'react';
 import { formatDate, greeting, todayLabel } from '../lib/format';
 import { WeeklyDashboard } from '../components/WeeklyDashboard';
 import { RecoveryPanel } from '../components/RecoveryPanel';
-import { localWeekKey } from '../lib/recovery';
+import { hasWeeklyPlanRecord, localWeekKey, savedRecoverySets } from '../lib/recovery';
 import { NutritionSummary } from '../nutrition/NutritionSummary';
 import type { NutritionState } from '../nutrition/types';
-import { getSuggestedPlanId } from '../lib/starterPlans';
+import { FULL_BODY_DAYS, getSuggestedPlanId } from '../lib/starterPlans';
 import { plannedSets } from '../lib/trainingModes';
 import type { ActiveWorkout, Exercise, RecoveryItem, RecoverySelection, WorkoutHistory, WorkoutPlan } from '../types';
 
 type HomeScreenProps = {
   plans: WorkoutPlan[];
+  calendarWeek?: string;
   nutrition?: NutritionState;
   onOpenNutrition?: () => void;
   history: WorkoutHistory[];
@@ -36,14 +38,9 @@ type HomeScreenProps = {
   onGoHistory: () => void;
 };
 
-const WORKOUT_DAYS = [
-  { planId: 'plan-full-body-a', short: 'SEG', label: 'Segunda', workout: 'A' },
-  { planId: 'plan-full-body-b', short: 'QUA', label: 'Quarta', workout: 'B' },
-  { planId: 'plan-full-body-c', short: 'SEX', label: 'Sexta', workout: 'C' },
-] as const;
-
 export function HomeScreen({
   plans,
+  calendarWeek,
   nutrition,
   onOpenNutrition,
   history,
@@ -72,8 +69,8 @@ export function HomeScreen({
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId)
     ?? plans.find((plan) => plan.id === todayPlanId)
     ?? plans[0];
-  const selectedDay = WORKOUT_DAYS.find((day) => day.planId === selectedPlan?.id);
-  const availableDays = WORKOUT_DAYS.filter((day) => plans.some((plan) => plan.id === day.planId));
+  const selectedDay = FULL_BODY_DAYS.find((day) => day.planId === selectedPlan?.id);
+  const availableDays = FULL_BODY_DAYS.filter((day) => plans.some((plan) => plan.id === day.planId));
   const selectedSets = selectedPlan ? plannedSets(selectedPlan) : 0;
   const completed = activeWorkout?.exercises.reduce(
     (total, item) => total + (item.skipped ? 0 : item.sets.filter((set) => set.completed).length),
@@ -82,11 +79,9 @@ export function HomeScreen({
   const total = activeWorkout?.exercises.reduce((sum, item) => sum + (item.skipped ? 0 : item.sets.length), 0) ?? 0;
   const selectedWorkoutIsActive = Boolean(activeWorkout && activeWorkout.planId === selectedPlan?.id);
   const anotherWorkoutIsActive = Boolean(activeWorkout && !selectedWorkoutIsActive);
-  const week = localWeekKey();
-  const hasWeeklyRecord = Boolean(selectedPlan && (queuedMissedPlans.includes(`${week}::${selectedPlan.id}`)
-    || recoveryItems.some((item) => item.sourcePlanId === selectedPlan.id && item.weekStart === week)
-    || history.some((item) => item.planId === selectedPlan.id && localWeekKey(new Date(item.startedAt)) === week
-      || item.recoveryWeekStart === week && item.recoverySourcePlanIds?.includes(selectedPlan.id))));
+  const week = calendarWeek ?? localWeekKey();
+  const weekPendingSets = savedRecoverySets(recoveryItems.filter((item) => item.weekStart === week));
+  const hasWeeklyRecord = Boolean(selectedPlan && hasWeeklyPlanRecord({ history, queuedMissedPlans, recoveryItems }, selectedPlan.id, week));
 
   return (
     <section className="screen home-screen home-screen--premium" aria-labelledby="home-title">
@@ -143,6 +138,7 @@ export function HomeScreen({
               );
             })}
           </div>
+          {weekPendingSets > 0 ? <a className="button button-secondary button-wide day-picker__recovery" href="#weekly-recovery"><CalendarClock size={18} /> Dia D · {weekPendingSets} {weekPendingSets === 1 ? 'série pendente' : 'séries pendentes'}</a> : null}
         </section>
       ) : null}
 
@@ -195,8 +191,8 @@ export function HomeScreen({
         </article>
       )}
 
+      <RecoveryPanel items={recoveryItems} currentWeek={week} activeWorkout={activeWorkout} onStart={onStartRecovery} onDiscard={onDiscardRecovery} />
       <WeeklyDashboard plans={plans} history={history} />
-      <RecoveryPanel items={recoveryItems} activeWorkout={activeWorkout} onStart={onStartRecovery} onDiscard={onDiscardRecovery} />
 
       {lastWorkout ? (
         <button className="last-workout-card interactive-card" type="button" onClick={onGoHistory}>

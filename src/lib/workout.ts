@@ -9,7 +9,8 @@ import type {
   RecoveryItem,
   RecoverySelection,
 } from '../types';
-import { chooseRecoveryItems, localWeekKey, MAX_SAVED_RECOVERY_ITEMS, settleRecoveryItems } from './recovery';
+import { chooseRecoveryItems, hasWeeklyPlanRecord, isAutomaticMissFor, localWeekKey, MAX_SAVED_RECOVERY_ITEMS, settleRecoveryItems } from './recovery';
+import { FULL_BODY_DAYS } from './starterPlans';
 
 export type ExerciseInput = Omit<Exercise, 'id'> & { id?: string };
 
@@ -558,11 +559,14 @@ export function finishActiveWorkout(
     history.exercises = [...grouped.values()];
   }
   // Recovery items stay reserved in the queue until this whole state is durably saved.
+  const week = workout.recoveryWeekStart ?? localWeekKey(new Date(workout.startedAt));
+  const queue = state.recoveryItems ?? [];
   const recoveryItems = workout.recoveryItemIds
     ? settleRecoveryItems(state, workout)
-    : [...(state.recoveryItems ?? []), ...pendingItemsFromWorkout(workout, finishedAt)];
+    : queue.some((item) => isAutomaticMissFor(item, workout.planId, week))
+      ? settleLateFullBody(queue, history, week)
+      : [...queue, ...pendingItemsFromWorkout(workout, finishedAt)];
   if (recoveryItems.length > MAX_SAVED_RECOVERY_ITEMS) throw new Error('A fila está cheia. Seu treino continua aberto: no Início, descarte pendências antigas não reservadas e tente encerrar novamente.');
-  const week = workout.recoveryWeekStart ?? localWeekKey(new Date(workout.startedAt));
   const currentWeek = localWeekKey(nowDate);
   const ledger = (state.queuedMissedPlans ?? []).filter((key) => key.startsWith(`${currentWeek}::`) || key.startsWith(`${week}::`));
   if (!workout.recoveryItemIds && workout.planId) ledger.push(`${week}::${workout.planId}`);
@@ -577,6 +581,16 @@ export function finishActiveWorkout(
     },
     history,
   };
+}
+
+/** A late regular session pays down its automatic absence, without duplicating the queue. */
+function settleLateFullBody(queue: RecoveryItem[], history: WorkoutHistory, week: string): RecoveryItem[] {
+  const completed = new Map(history.exercises.map((exercise) => [exercise.exerciseId, new Set(exercise.sets.map((set) => set.setNumber))]));
+  return queue.flatMap((item) => {
+    if (!isAutomaticMissFor(item, history.planId, week)) return [item];
+    const sets = item.exercise.sets.filter((set) => !completed.get(item.exercise.exerciseId)?.has(set.setNumber));
+    return sets.length ? [{ ...item, exercise: { ...item.exercise, sets } }] : [];
+  });
 }
 
 function pendingItemsFromWorkout(workout: ActiveWorkout, savedAt: string): RecoveryItem[] {
@@ -602,7 +616,7 @@ export function startRecoveryWorkout(state: AppState, selections: RecoverySelect
     sets: sets.map((set) => ({ ...set, id: createWorkoutId('set'), recoveryItemId: item.id, recoverySetId: set.id, completed: false, completedAt: null })),
   }));
   const workout: ActiveWorkout = {
-    id: createWorkoutId('recovery'), planId: null, planName: 'Reposição de séries',
+    id: createWorkoutId('recovery'), planId: null, planName: 'Dia D · Reposição',
     startedAt: now, updatedAt: now, currentExerciseIndex: 0, currentSetIndex: 0,
     restStartedAt: null, restEndsAt: null, restDurationSeconds: null,
     recoveryItemIds: chosen.map(({ item }) => item.id), recoveryWeekStart: chosen[0].item.weekStart, exercises,
@@ -614,10 +628,7 @@ export function queueMissedWorkoutPlan(state: AppState, planId: string, now = ne
   if (state.activeWorkout) throw new Error('Encerre a sessão atual antes de registrar uma ficha não realizada.');
   const week = localWeekKey(new Date(now));
   const key = `${week}::${planId}`;
-  if (state.queuedMissedPlans?.includes(key)
-    || state.recoveryItems?.some((item) => item.weekStart === week && item.sourcePlanId === planId)
-    || state.history.some((session) => session.planId === planId && localWeekKey(new Date(session.startedAt)) === week
-      || session.recoveryWeekStart === week && session.recoverySourcePlanIds?.includes(planId))) {
+  if (hasWeeklyPlanRecord(state, planId, week)) {
     throw new Error('Esta ficha já foi registrada ou tem pendências nesta semana.');
   }
   const pending = pendingItemsFromWorkout(startWorkoutFromPlan(state, planId, now).workout, now);
@@ -625,4 +636,36 @@ export function queueMissedWorkoutPlan(state: AppState, planId: string, now = ne
   return { ...state, recoveryItems: [...(state.recoveryItems ?? []), ...pending],
     queuedMissedPlans: [...new Set([...(state.queuedMissedPlans ?? []).filter((entry) => entry.startsWith(`${week}::`)), key])], updatedAt: now,
   };
+}
+
+export function missedFullBodyPlans(state: AppState, now: Date): WorkoutPlan[] {
+  if (state.activeWorkout) return [];
+  const week = localWeekKey(now);
+  const monday = new Date(`${week}T00:00:00`);
+  return FULL_BODY_DAYS.flatMap(({ planId, offset }) => {
+    const plan = state.plans.find((candidate) => candidate.id === planId);
+    const deadline = new Date(monday);
+    deadline.setDate(deadline.getDate() + offset + 1);
+    return plan?.exercises.length && now >= deadline && Date.parse(plan.createdAt) < deadline.getTime()
+      && !hasWeeklyPlanRecord(state, planId, week) ? [plan] : [];
+  });
+}
+
+/** Reconcile the current week only. History and prior weeks are never synthesized. */
+export function queueAutomaticFullBodyMisses(state: AppState, now = new Date()): AppState {
+  const plans = missedFullBodyPlans(state, now);
+  if (!plans.length) return state;
+  const iso = now.toISOString();
+  const week = localWeekKey(now);
+  const queue = [...(state.recoveryItems ?? [])];
+  const ledger = (state.queuedMissedPlans ?? []).filter((key) => key.startsWith(`${week}::`));
+  let added = false;
+  for (const plan of plans) {
+    if (queue.length + plan.exercises.length > MAX_SAVED_RECOVERY_ITEMS) continue;
+    const pending = pendingItemsFromWorkout(startWorkoutFromPlan(state, plan.id, iso).workout, iso);
+    queue.push(...pending.map((item): RecoveryItem => ({ ...item, automaticMiss: true })));
+    ledger.push(`${week}::${plan.id}`);
+    added = true;
+  }
+  return added ? { ...state, recoveryItems: queue, queuedMissedPlans: ledger, updatedAt: iso } : state;
 }

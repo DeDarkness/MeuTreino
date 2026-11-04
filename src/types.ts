@@ -125,6 +125,8 @@ export interface ActiveWorkout {
 }
 
 export interface RecoveryItem {
+  /** Created automatically for a scheduled day that ended without a session. */
+  automaticMiss?: true;
   id: string;
   sourceWorkoutId: string;
   sourcePlanId?: string;

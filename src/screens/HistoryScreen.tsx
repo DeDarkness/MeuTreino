@@ -13,6 +13,7 @@ import {
   Trophy,
   Zap,
   Search,
+  ListChecks,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -20,7 +21,9 @@ import { formatDate, formatDuration, formatWeight } from '../lib/format';
 import { buildExerciseProgress, getLoadSuggestion, type ExerciseProgress } from '../lib/progress';
 import { searchText } from '../lib/weeklyInsights';
 import { recoveryWeekLabel } from '../lib/recovery';
+import { HistoryPdfActions } from '../components/HistoryPdfActions';
 import type { WeightUnit, WorkoutHistory, WorkoutPlan } from '../types';
+import './history-export.css';
 
 type HistoryScreenProps = {
   history: WorkoutHistory[];
@@ -305,33 +308,57 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [period, setPeriod] = useState('all');
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const since = new Date();
   since.setDate(since.getDate() - Number(period === 'all' ? 0 : period));
   const sorted = history.filter((item) => (period === 'all' || Date.parse(item.finishedAt) >= since.getTime())
     && searchText(`${item.planName} ${item.notes ?? ''} ${item.exercises.map((exercise) => exercise.exerciseName).join(' ')}`).includes(searchText(query)))
     .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt));
+  const selected = history.filter((item) => selectedIds.has(item.id));
+  const outside = selected.length - sorted.filter((item) => selectedIds.has(item.id)).length;
+  const toggle = (id: string, checked: boolean) => setSelectedIds((previous) => {
+    const next = new Set(previous);
+    if (checked) next.add(id); else next.delete(id);
+    return next;
+  });
 
   return (
     <div className="history-list">
       <label className="elite-search"><Search size={18} aria-hidden="true" /><input type="search" aria-label="Buscar no histórico" placeholder="Treino, exercício ou anotação…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       <label className="elite-period">Período<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="all">Todo o histórico</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></label>
       <p className="elite-caption">{sorted.length} {sorted.length === 1 ? 'sessão encontrada' : 'sessões encontradas'}</p>
+      <button className="button button-secondary button-wide" type="button" aria-expanded={selecting} aria-controls={selecting ? 'history-export' : undefined} onClick={() => {
+        setSelecting(!selecting);
+        setSelectedIds(new Set());
+      }}><ListChecks size={18} /> {selecting ? 'Sair da seleção' : 'Selecionar treinos para PDF'}</button>
+      {selecting ? <section className="history-selection" id="history-export" aria-label="Exportar treinos selecionados">
+        <p className="elite-caption" aria-live="polite">{selected.length} {selected.length === 1 ? 'treino selecionado' : 'treinos selecionados'}{outside ? ` · ${outside} fora do filtro atual` : ''}</p>
+        <div className="history-export-buttons">
+          <button className="button button-secondary" type="button" disabled={!sorted.some((item) => !selectedIds.has(item.id))} onClick={() => setSelectedIds((previous) => new Set([...previous, ...sorted.map((item) => item.id)]))}>Selecionar resultados</button>
+          <button className="button button-secondary" type="button" disabled={!selected.length} onClick={() => setSelectedIds(new Set())}>Limpar seleção</button>
+        </div>
+        <HistoryPdfActions key={JSON.stringify([weightUnit, selected.map((item) => item.id)])} sessions={selected} weightUnit={weightUnit} />
+      </section> : null}
       {!sorted.length ? <div className="elite-empty-search">Nenhum registro corresponde à busca. Seu histórico não foi apagado.</div> : null}
       {sorted.map((item) => {
         const open = item.id === expandedId;
         const itemSets = item.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
         return (
-          <article className={`history-card ${open ? 'is-open' : ''}`} key={item.id}>
+          <article className={`history-card ${open ? 'is-open' : ''}${selecting && selectedIds.has(item.id) ? ' history-card--selected' : ''}`} key={item.id}>
+            <div className="history-card-selection-row">
+            {selecting ? <label className="history-card-check"><input type="checkbox" checked={selectedIds.has(item.id)} aria-label={`Selecionar ${item.planName} de ${formatDate(item.finishedAt, true)}`} onChange={(event) => toggle(item.id, event.target.checked)} /></label> : null}
             <button className="history-card-summary" type="button" onClick={() => setExpandedId(open ? null : item.id)} aria-expanded={open}>
               <div className="history-date-badge"><CalendarDays size={21} /></div>
               <div className="history-card-copy">
                 <strong>{item.planName}</strong>
                 <span>{formatDate(item.finishedAt, true)} · {formatDuration(item.durationSeconds)}</span>
-                <small>{item.exercises.length} exercícios · {itemSets} séries</small>
+                <small>{item.exercises.length} {item.exercises.length === 1 ? 'exercício' : 'exercícios'} · {itemSets} {itemSets === 1 ? 'série' : 'séries'}</small>
                 {item.recoveryWeekStart ? <small>Reposição · origem: {recoveryWeekLabel(item.recoveryWeekStart)}</small> : null}
               </div>
               <ChevronDown className="chevron" size={20} />
             </button>
+            </div>
             {open ? (
               <div className="history-details">
                 {item.notes ? <p className="history-session-note">“{item.notes}”</p> : null}
@@ -349,7 +376,7 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
                     </div>
                   </div>
                 ))}
-                <button
+                {!selecting ? <button
                   className="text-button danger"
                   type="button"
                   onClick={() => {
@@ -357,12 +384,13 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
                   }}
                 >
                   <Trash2 size={17} /> Excluir registro
-                </button>
+                </button> : null}
               </div>
             ) : null}
           </article>
         );
       })}
+      {selecting && selected.length > 0 ? <a className="button button-secondary button-wide history-export-jump" href="#history-export">Voltar à seleção e ao PDF</a> : null}
     </div>
   );
 }

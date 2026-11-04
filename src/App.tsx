@@ -16,7 +16,7 @@ import { useWorkoutStore } from './hooks/useWorkoutStore';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { getRestNotificationPermission, type RestNotificationPermission } from './lib/notifications';
 import { enablePushNotifications } from './lib/pushNotifications';
-import { localWeekKey, remainingSetCount } from './lib/recovery';
+import { isAutomaticMissFor, localWeekKey, remainingSetCount } from './lib/recovery';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -123,8 +123,11 @@ export default function App() {
       return;
     }
     const start = async () => { await store.startWorkout(plan.id); setShowActiveWorkout(true); };
-    if (state.recoveryItems?.some((item) => item.sourcePlanId === plan.id && item.weekStart === localWeekKey())) {
-      setConfirmation({ title: 'Iniciar a ficha inteira novamente?', message: 'Esta ficha já tem séries pendentes nesta semana. Iniciar outra sessão completa não substitui essas pendências. Para continuar só o que faltou, volte ao Início e use Reposição da semana.', confirmLabel: 'Iniciar nova sessão completa', onConfirm: start });
+    const week = localWeekKey();
+    const pending = state.recoveryItems?.filter((item) => item.sourcePlanId === plan.id && item.weekStart === week) ?? [];
+    if (pending.length) {
+      const automatic = pending.some((item) => isAutomaticMissFor(item, plan.id, week));
+      setConfirmation({ title: 'Iniciar a ficha inteira?', message: automatic ? 'Ao encerrar, as séries feitas serão abatidas da falta automática no Dia D. Você também pode escolher só algumas séries no Dia D.' : 'Esta ficha já tem séries pendentes nesta semana. Para fazer só o que faltou, use o Dia D. Iniciar outra sessão completa não substitui as pendências anteriores.', confirmLabel: 'Iniciar ficha inteira', onConfirm: start });
       return;
     }
     await start();
@@ -273,6 +276,7 @@ export default function App() {
         {activeTab === 'home' ? (
           <HomeScreen
             plans={state.plans}
+            calendarWeek={store.calendarWeek}
             nutrition={state.nutrition}
             onOpenNutrition={() => setActiveTab('nutrition')}
             history={state.history}

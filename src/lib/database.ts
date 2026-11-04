@@ -315,6 +315,7 @@ function validateRecoveryState(value: Record<string, unknown>, issues: string[])
       if (!isNonEmptyString(item.id) || itemIds.has(item.id)) issues.push(`${path}.id inválido ou repetido`);
       else itemIds.add(item.id);
       if (!isNonEmptyString(item.sourceWorkoutId)) issues.push(`${path}.sourceWorkoutId inválido`);
+      if (item.automaticMiss !== undefined && (item.automaticMiss !== true || !isNonEmptyString(item.sourcePlanId))) issues.push(`${path}.automaticMiss inválido`);
       if (item.sourcePlanId !== undefined && !isNonEmptyString(item.sourcePlanId)) issues.push(`${path}.sourcePlanId inválido`);
       if (!isNonEmptyString(item.sourcePlanName)) issues.push(`${path}.sourcePlanName inválido`);
       if (!isWeekKey(item.weekStart)) issues.push(`${path}.weekStart inválido`);
