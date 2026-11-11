@@ -144,6 +144,20 @@
 .workout-summary-actions { display: grid; grid-template-columns: 1.25fr 1fr; gap: 8px; margin-top: 15px; }
 .workout-summary-actions button { display: flex; min-height: 48px; padding: 0 12px; align-items: center; justify-content: center; gap: 7px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; color: #f4f7f2; background: #1b221c; font-size: 0.7rem; font-weight: 850; cursor: pointer; }
 .workout-summary-actions button.is-primary { border-color: #a6f033; color: #0b1106; background: #a6f033; }
+.workout-summary-recovery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  margin-block: 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+}
+.workout-summary-recovery > div { display: grid; gap: 4px; }
+.workout-summary-recovery span { color: var(--muted-strong); font-size: .8rem; }
+.workout-summary-recovery button { min-height: 44px; }
 
 .workout-summary-confetti i { position: absolute; top: 55px; width: 7px; height: 13px; border-radius: 2px; background: #a6f033; animation: summary-confetti 2.2s ease-in-out infinite; }
 .workout-summary-confetti i:nth-child(1) { left: 12%; animation-delay: -0.2s; transform: rotate(17deg); }

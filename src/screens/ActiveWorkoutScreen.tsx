@@ -39,6 +39,7 @@ import './active-workout.css';
 
 export interface ActiveWorkoutScreenProps {
   workout: ActiveWorkout;
+  saving?: boolean;
   preferences: Preferences;
   history: WorkoutHistory[];
   onUpdateSet: (
@@ -47,7 +48,7 @@ export interface ActiveWorkoutScreenProps {
     patch: Partial<Pick<ActiveWorkoutSet, 'reps' | 'weight' | 'rir'>>,
   ) => void;
   onSelectSet: (exerciseIndex: number, setIndex: number) => void;
-  onCompleteSet: () => void;
+  onCompleteSet: (patch?: Partial<Pick<ActiveWorkoutSet, 'reps' | 'weight' | 'rir'>>) => void;
   onUncompleteSet: (exerciseIndex: number, setIndex: number) => void;
   onMoveExercise: (exerciseIndex: number, direction: -1 | 1) => void;
   onDeferExercise: (exerciseIndex: number) => void;
@@ -64,6 +65,7 @@ export interface ActiveWorkoutScreenProps {
 
 export function ActiveWorkoutScreen({
   workout,
+  saving = false,
   preferences,
   history,
   onUpdateSet,
@@ -146,7 +148,7 @@ export function ActiveWorkoutScreen({
         <Trophy aria-hidden="true" size={54} />
         <h1>Treino concluído</h1>
         <p>Todas as séries desta ficha foram registradas.</p>
-        <button className="active-workout__primary-button" type="button" onClick={onFinish}>
+        <button className="active-workout__primary-button" type="button" disabled={saving} onClick={onFinish}>
           Salvar treino
         </button>
       </main>
@@ -253,7 +255,9 @@ export function ActiveWorkoutScreen({
               Usar
             </button>
           </div>
-        ) : progressionAdvice ? <div className={`elite-advice elite-advice--${progressionAdvice.kind}`}><strong>{progressionAdvice.title}</strong><p>{progressionAdvice.message}</p></div> : null}
+        ) : progressionAdvice ? <div className={`elite-advice elite-advice--${progressionAdvice.kind}`}><strong>{progressionAdvice.title}</strong><p>{progressionAdvice.message}</p>
+          {progressionAdvice.repSuggestion !== undefined && previousSet?.weight === currentSet.weight && currentSet.reps < progressionAdvice.repSuggestion && !currentSet.completed ? <button className="button button-secondary" type="button" disabled={saving} onClick={() => onUpdateSet(exerciseIndex, setIndex, { reps: progressionAdvice.repSuggestion })}>Usar {progressionAdvice.repSuggestion} reps</button> : null}
+        </div> : null}
 
         {previousSet ? (
           <div className="active-workout__last-hint">
@@ -322,9 +326,15 @@ export function ActiveWorkoutScreen({
             <Check aria-hidden="true" size={19} /> Série concluída · <u>desfazer</u>
           </button>
         ) : (
+          <>
             <button className="active-workout__complete-button" type="button" onClick={completeCurrentSet}>
               <Check aria-hidden="true" size={25} strokeWidth={3} /> Concluir série
             </button>
+            {previousSet && previousSet.reps > 0 ? <button className="button button-secondary button-wide" type="button" disabled={saving} onClick={() => {
+              primeRestAlertAudio(preferences.soundEnabled);
+              onCompleteSet({ reps: previousSet.reps, weight: previousSet.weight, rir: previousSet.rir ?? null });
+            }}>Concluir com os valores do último treino</button> : null}
+          </>
         )}
 
         {completedSets === totalSets ? (
@@ -332,7 +342,7 @@ export function ActiveWorkoutScreen({
             <Trophy aria-hidden="true" size={42} />
             <h2>Treino concluído!</h2>
             <p>Revise as cargas ou salve as {totalSets} séries no histórico.</p>
-            <button className="active-workout__complete-button" type="button" onClick={onFinish}>
+            <button className="active-workout__complete-button" type="button" disabled={saving} onClick={onFinish}>
               <Check aria-hidden="true" size={24} strokeWidth={3} /> Salvar no histórico
             </button>
           </div>
@@ -393,11 +403,11 @@ export function ActiveWorkoutScreen({
       <WorkoutNotes value={workout.notes ?? ''} onSave={onUpdateNotes} />
 
       <footer className="active-workout__footer">
-        <button className="active-workout__finish-button" type="button" onClick={onFinish}>
+        <button className="active-workout__finish-button" type="button" disabled={saving} onClick={onFinish}>
           <Trophy aria-hidden="true" size={20} />
           Encerrar e guardar pendências
         </button>
-        <button className="active-workout__abandon-button" type="button" onClick={onAbandon}>
+        <button className="active-workout__abandon-button" type="button" disabled={saving} onClick={onAbandon}>
           <X aria-hidden="true" size={18} />
           Abandonar treino
         </button>
@@ -495,7 +505,7 @@ function WorkoutNotes({ value, onSave }: { value: string; onSave: (value: string
     <section className="active-workout__notes-card" aria-labelledby="workout-notes-title">
       <div className="active-workout__section-title">
         <StickyNote aria-hidden="true" size={20} />
-        <div><h2 id="workout-notes-title">Anotação rápida</h2><p>Registre técnica, desconforto ou algo para lembrar.</p></div>
+        <div><h2 id="workout-notes-title">Anotação rápida</h2><p>Registre técnica, recuperação percebida e desconfortos.</p></div>
       </div>
       <textarea
         rows={3}

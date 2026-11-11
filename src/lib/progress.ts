@@ -24,6 +24,7 @@ export type ExerciseProgress = {
   maxReps: number;
   bestVolume: number;
   bestEstimatedOneRepMax: number | null;
+  bestRepsByWeight: Map<number, number>;
 };
 
 export type LoadSuggestion = {
@@ -33,16 +34,18 @@ export type LoadSuggestion = {
   targetReps: number;
   basedOn: string;
   percentage: number;
+  referenceSessions?: number;
 };
 
 type ProgressionExercise = (Pick<Exercise, 'id' | 'name' | 'targetSets' | 'targetReps'>
-  & Partial<Pick<Exercise, 'notes' | 'targetRirMin' | 'targetRirMax' | 'loadIncrementKg'>>) | ActiveWorkoutExercise;
+  & Partial<Pick<Exercise, 'notes' | 'minReps' | 'targetRirMin' | 'targetRirMax' | 'loadIncrementKg'>>) | ActiveWorkoutExercise;
 
 export type ProgressionAdvice = {
   kind: 'start' | 'maintain' | 'record-rir' | 'adjust-step' | 'increase';
   title: string;
   message: string;
   suggestion: LoadSuggestion | null;
+  repSuggestion?: number;
 };
 
 export function buildExerciseProgress(history: WorkoutHistory[]): ExerciseProgress[] {
@@ -74,12 +77,17 @@ export function buildExerciseProgress(history: WorkoutHistory[]): ExerciseProgre
         maxReps: 0,
         bestVolume: 0,
         bestEstimatedOneRepMax: null,
+        bestRepsByWeight: new Map<number, number>(),
       };
       current.sessions.push(session);
       current.maxWeight = maximumNullable(current.maxWeight, session.maxWeight);
       current.maxReps = Math.max(current.maxReps, session.maxReps);
       current.bestVolume = Math.max(current.bestVolume, session.volume);
       current.bestEstimatedOneRepMax = maximumNullable(current.bestEstimatedOneRepMax, session.estimatedOneRepMax);
+      for (const set of weightedSets) {
+        const weight = set.weight!;
+        current.bestRepsByWeight.set(weight, Math.max(current.bestRepsByWeight.get(weight) ?? 0, set.reps));
+      }
       grouped.set(key, current);
     }
   }
@@ -101,24 +109,33 @@ export function getProgressionAdvice(history: WorkoutHistory[], exercise: Progre
   const targetReps = 'targetReps' in exercise
     ? exercise.targetReps
     : Math.max(...exercise.sets.map((set) => set.targetReps));
-  const latest = [...history]
+  const minimumRir = exercise.targetRirMin ?? 2;
+  const exerciseName = normalized('name' in exercise ? exercise.name : exercise.exerciseName);
+  const exerciseId = 'id' in exercise ? exercise.id : exercise.sourceExerciseId ?? exercise.exerciseId;
+  const regular = history.filter((session) => !session.recoveryWeekStart && session.trainingMode !== 'express')
     .sort((left, right) => Date.parse(right.finishedAt) - Date.parse(left.finishedAt))
     .map((workout) => ({
       workout,
-      exercise: workout.exercises.find((candidate) =>
-        normalized(candidate.exerciseName) === normalized('name' in exercise ? exercise.name : exercise.exerciseName)),
+      exercise: workout.exercises.find((candidate) => candidate.exerciseId === exerciseId && normalized(candidate.exerciseName) === exerciseName)
+        ?? workout.exercises.find((candidate) => normalized(candidate.exerciseName) === exerciseName),
     }))
-    .find((candidate) => candidate.exercise)?.exercise;
+    .flatMap((candidate) => candidate.exercise ? [candidate.exercise] : []);
+  const [latest, previous] = regular;
 
   if (!latest) return advice('start', 'Construa sua referência', 'Registre carga, repetições e RIR. Nenhuma carga é aumentada automaticamente.');
   if (latest.sets.length < targetSets) return advice('maintain', 'Complete a referência', 'A última sessão teve menos séries que a meta atual. Registre uma sessão com a quantidade planejada antes de progredir.');
   if (!latest.sets.every((set) => set.reps >= targetReps && set.weight !== null && set.weight > 0)) {
+    const lowest = Math.min(...latest.sets.map((set) => set.reps));
+    const load = latest.sets[0]?.weight;
+    if (load && lowest >= (exercise.minReps ?? targetReps) && lowest < targetReps && latest.sets.every((set) =>
+      set.weight === load && set.rir !== undefined && set.rir !== null && set.rir >= minimumRir)) {
+      return { ...advice('maintain', 'Progrida em repetições', `Mantenha a carga de referência e tente ${lowest + 1} repetições nas séries que ficaram abaixo, respeitando seu RIR.`), repSuggestion: lowest + 1 };
+    }
     return advice('maintain', 'Consolide a carga atual', `Busque ${targetReps} repetições em todas as séries, com técnica estável e respeitando o RIR alvo.`);
   }
   if (latest.sets.some((set) => set.rir === null || set.rir === undefined)) {
     return advice('record-rir', 'Falta registrar o esforço', 'O topo das repetições foi atingido, mas falta RIR em alguma série. Sem esse dado, o app não recomenda aumentar a carga.');
   }
-  const minimumRir = exercise.targetRirMin ?? 2;
   if (latest.sets.some((set) => set.rir! < minimumRir)) {
     return advice('maintain', 'Mantenha a carga por enquanto', `Alguma série ficou abaixo do RIR ${minimumRir}. Consolide as repetições com mais reserva antes de subir.`);
   }
@@ -126,6 +143,10 @@ export function getProgressionAdvice(history: WorkoutHistory[], exercise: Progre
   const currentWeight = Math.min(...latest.sets.map((set) => set.weight!));
   if (latest.sets.some((set) => Math.abs(set.weight! - currentWeight) > 0.01)) {
     return advice('maintain', 'Compare séries equivalentes', 'A última sessão teve cargas diferentes entre séries. Ajuste cada série manualmente; não há aumento único confiável.');
+  }
+  const sameLoad = previous?.sets.length >= targetSets && previous.sets.every((set) => set.weight !== null && Math.abs(set.weight - currentWeight) <= 0.01);
+  if (sameLoad && previous.sets.some((set) => set.reps < targetReps || set.rir === null || set.rir === undefined || set.rir < minimumRir)) {
+    return advice('maintain', 'Confirme a evolução', 'O registro anterior nesta carga ainda não confirmou repetições e RIR. Repita a referência antes de subir.');
   }
   const steps = unit === 'lb' ? [0.5, 1, 2.5, 5, 10].map((step) => step / 2.2046226218) : [0.25, 0.5, 1, 1.25, 2.5, 5];
   const increment = exercise.loadIncrementKg ?? steps.filter((step) => step <= currentWeight * 0.05 + 0.00001).at(-1);
@@ -139,8 +160,9 @@ export function getProgressionAdvice(history: WorkoutHistory[], exercise: Progre
     targetReps,
     basedOn: latest.exerciseName,
     percentage: Math.round(increment / currentWeight * 1000) / 10,
+    referenceSessions: sameLoad ? 2 : 1,
   };
-  return { kind: 'increase', title: 'Pronto para um pequeno avanço', message: `Repetições e RIR conferidos. Sugestão de +${suggestion.percentage}%: confirme o equipamento e a execução antes de aplicar.`, suggestion };
+  return { kind: 'increase', title: 'Pronto para um pequeno avanço', message: `Referência: ${suggestion.referenceSessions} ${sameLoad ? 'sessões' : 'sessão'} com repetições e RIR conferidos. Sugestão de +${suggestion.percentage}%: confirme antes de aplicar.`, suggestion };
 }
 
 export function getPotentialRecordLabels(

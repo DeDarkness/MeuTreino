@@ -90,6 +90,33 @@ describe('Dia D automático', () => {
 });
 
 describe('encerramento flexível e origem das pendências', () => {
+  it('guarda exatamente a última série de uma sessão, restaura a fila e encerra o Dia D ao repor', async () => {
+    let state = begin();
+    const planned = state.activeWorkout!.exercises;
+    const lastExercise = planned.at(-1)!;
+    const lastSet = lastExercise.sets.at(-1)!;
+    for (const [index, exercise] of planned.entries()) {
+      for (const [setIndex, set] of exercise.sets.entries()) {
+        if (set.id !== lastSet.id) state = mark(state, index, setIndex);
+      }
+    }
+    state = updateActiveSet(state, lastExercise.exerciseId, lastSet.id, { reps: 11, weight: 17.5, rir: 2 }, monday);
+    const closed = finishActiveWorkout(state, new Date(monday));
+    expect(closed.recovery).toEqual({ week: '2026-10-19', sets: 1 });
+    expect(closed.history.exercises.flatMap((exercise) => exercise.sets)).toHaveLength(21);
+    expect(closed.state.recoveryItems).toHaveLength(1);
+    await saveState(closed.state);
+
+    const restored = await loadState();
+    expect(restored.recoveryItems![0].exercise.sets).toEqual([
+      expect.objectContaining({ id: lastSet.id, setNumber: lastSet.setNumber, reps: 11, weight: 17.5, rir: 2, completed: false }),
+    ]);
+    const recovery = startRecoveryWorkout(restored, choices(restored), saturday).state;
+    const completed = finishActiveWorkout(mark(recovery), new Date(saturday));
+    expect(completed.recovery).toBeNull();
+    expect(completed.state.recoveryItems).toEqual([]);
+  });
+
   it('encerra sem nenhuma série, sem inventar histórico, e guarda a ficha toda', () => {
     const initial = begin();
     const result = finish(initial);
@@ -125,8 +152,9 @@ describe('encerramento flexível e origem das pendências', () => {
     const sunday = new Date(2026, 9, 25, 23, 59);
     const nextMonday = new Date(2026, 9, 26, 0, 20);
     const started = startWorkoutFromPlan(seed(), seed().plans[0].id, sunday.toISOString()).state;
-    const result = finish(started, nextMonday.toISOString());
+    const { state: result, recovery } = finishActiveWorkout(started, nextMonday);
     expect(result.recoveryItems!.every((item) => item.weekStart === '2026-10-19')).toBe(true);
+    expect(recovery).toEqual({ week: '2026-10-19', sets: 22 });
     expect(localWeekKey(nextMonday)).toBe('2026-10-26');
   });
   it.each(['2026-10-20', '2026-02-30', '2026-13-19', '2026-1-19', '', null])('rejeita chave de semana inválida: %s', (value) => expect(isWeekKey(value)).toBe(false));

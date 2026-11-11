@@ -20,9 +20,14 @@ import { useMemo, useState } from 'react';
 import { formatDate, formatDuration, formatWeight } from '../lib/format';
 import { buildExerciseProgress, getLoadSuggestion, type ExerciseProgress } from '../lib/progress';
 import { searchText } from '../lib/weeklyInsights';
-import { recoveryWeekLabel } from '../lib/recovery';
+import { localWeekKey, recoveryWeekLabel } from '../lib/recovery';
 import { HistoryPdfActions } from '../components/HistoryPdfActions';
-import type { WeightUnit, WorkoutHistory, WorkoutPlan } from '../types';
+import { HistoryComparison } from '../components/HistoryComparison';
+import { fullBodyDay } from '../lib/historyComparison';
+import { FULL_BODY_DAYS } from '../lib/starterPlans';
+import { TrainingTimeline } from '../components/TrainingTimeline';
+import { TrainingCycle } from '../components/TrainingCycle';
+import type { AppState, WeightUnit, WorkoutHistory, WorkoutPlan } from '../types';
 import './history-export.css';
 
 type HistoryScreenProps = {
@@ -30,10 +35,13 @@ type HistoryScreenProps = {
   plans: WorkoutPlan[];
   weightUnit: WeightUnit;
   onDelete: (id: string) => void;
+  calendarWeek?: string;
+  cycle?: AppState['trainingCycle'];
+  onCycleChange?: (cycle: AppState['trainingCycle']) => Promise<void>;
 };
 
-export function HistoryScreen({ history, plans, weightUnit, onDelete }: HistoryScreenProps) {
-  const [view, setView] = useState<'progress' | 'history'>('progress');
+export function HistoryScreen({ history, plans, weightUnit, onDelete, calendarWeek = localWeekKey(), cycle, onCycleChange }: HistoryScreenProps) {
+  const [view, setView] = useState<'progress' | 'history'>('history');
   const [selectedExerciseKey, setSelectedExerciseKey] = useState('');
   const progress = useMemo(() => buildExerciseProgress(history), [history]);
   const selectedProgress = progress.find((item) => item.key === selectedExerciseKey) ?? progress[0] ?? null;
@@ -88,6 +96,10 @@ export function HistoryScreen({ history, plans, weightUnit, onDelete }: HistoryS
         </button>
       </div>
 
+      {view === 'progress' ? <>
+        <TrainingTimeline history={history} plans={plans} week={calendarWeek} unit={weightUnit} />
+        {onCycleChange ? <TrainingCycle key={cycle?.startWeek ?? calendarWeek} cycle={cycle} week={calendarWeek} onChange={onCycleChange} /> : null}
+      </> : null}
       {history.length ? (
         view === 'progress' ? (
           <>
@@ -205,8 +217,10 @@ function ExerciseEvolution({
       <div className="record-grid">
         <Record icon={<Trophy />} label="Maior carga" value={formatWeight(selected.maxWeight, weightUnit)} />
         <Record icon={<Repeat2 />} label="Mais repetições" value={`${selected.maxReps} reps`} />
+        {latest.maxWeight != null ? <Record icon={<Repeat2 />} label={`Melhor em ${formatWeight(latest.maxWeight, weightUnit)}`} value={`${selected.bestRepsByWeight.get(latest.maxWeight)} reps`} /> : null}
         <Record icon={<Zap />} label="Força estimada" value={formatWeight(selected.bestEstimatedOneRepMax, weightUnit)} />
         <Record icon={<TrendingUp />} label="Melhor volume" value={formatWeight(selected.bestVolume || null, weightUnit)} />
+        <Record icon={<CalendarDays />} label="Sessões com este exercício" value={String(selected.sessions.length)} />
       </div>
       <p className="elite-caption">Força estimada não é um teste de carga máxima. Calculada apenas em séries de 1 a 12 repetições; resultados de equipamentos diferentes não são diretamente comparáveis.</p>
     </section>
@@ -308,13 +322,24 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [period, setPeriod] = useState('all');
+  const [workoutFilter, setWorkoutFilter] = useState('all');
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-  const since = new Date();
-  since.setDate(since.getDate() - Number(period === 'all' ? 0 : period));
-  const sorted = history.filter((item) => (period === 'all' || Date.parse(item.finishedAt) >= since.getTime())
-    && searchText(`${item.planName} ${item.notes ?? ''} ${item.exercises.map((exercise) => exercise.exerciseName).join(' ')}`).includes(searchText(query)))
-    .sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt));
+  const [includeCharts, setIncludeCharts] = useState(false);
+  const sorted = useMemo(() => {
+    const since = new Date();
+    since.setDate(since.getDate() - Number(period === 'all' ? 0 : period));
+    const text = searchText(query);
+    return history.filter((item) => {
+      if (period !== 'all' && Date.parse(item.finishedAt) < since.getTime()) return false;
+      if (workoutFilter === 'recovery' && !item.recoveryWeekStart) return false;
+      if (workoutFilter !== 'all' && workoutFilter !== 'recovery') {
+        const day = fullBodyDay(item);
+        if (!day || (workoutFilter !== 'full-body' && day.workout !== workoutFilter)) return false;
+      }
+      return !text || searchText(`${item.planName} ${item.notes ?? ''} ${item.exercises.map((exercise) => exercise.exerciseName).join(' ')}`).includes(text);
+    }).sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt));
+  }, [history, period, query, workoutFilter]);
   const selected = history.filter((item) => selectedIds.has(item.id));
   const outside = selected.length - sorted.filter((item) => selectedIds.has(item.id)).length;
   const toggle = (id: string, checked: boolean) => setSelectedIds((previous) => {
@@ -326,8 +351,15 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
   return (
     <div className="history-list">
       <label className="elite-search"><Search size={18} aria-hidden="true" /><input type="search" aria-label="Buscar no histórico" placeholder="Treino, exercício ou anotação…" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <label className="elite-period">Ficha<select value={workoutFilter} onChange={(event) => setWorkoutFilter(event.target.value)}>
+        <option value="all">Todas as fichas</option>
+        <option value="full-body">Full Body A/B/C</option>
+        {FULL_BODY_DAYS.map((day) => <option key={day.planId} value={day.workout}>Full Body {day.workout}</option>)}
+        <option value="recovery">Dia D · Reposições</option>
+      </select></label>
       <label className="elite-period">Período<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="all">Todo o histórico</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option></select></label>
       <p className="elite-caption">{sorted.length} {sorted.length === 1 ? 'sessão encontrada' : 'sessões encontradas'}</p>
+      {!selecting && sorted.length > 1 ? <HistoryComparison sessions={sorted} unit={weightUnit} /> : null}
       <button className="button button-secondary button-wide" type="button" aria-expanded={selecting} aria-controls={selecting ? 'history-export' : undefined} onClick={() => {
         setSelecting(!selecting);
         setSelectedIds(new Set());
@@ -338,9 +370,9 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
           <button className="button button-secondary" type="button" disabled={!sorted.some((item) => !selectedIds.has(item.id))} onClick={() => setSelectedIds((previous) => new Set([...previous, ...sorted.map((item) => item.id)]))}>Selecionar resultados</button>
           <button className="button button-secondary" type="button" disabled={!selected.length} onClick={() => setSelectedIds(new Set())}>Limpar seleção</button>
         </div>
-        <HistoryPdfActions key={JSON.stringify([weightUnit, selected.map((item) => item.id)])} sessions={selected} weightUnit={weightUnit} />
+        <HistoryPdfActions key={JSON.stringify([weightUnit, selected.map((item) => item.id)])} sessions={selected} weightUnit={weightUnit} includeCharts={includeCharts} onChartsChange={setIncludeCharts} />
       </section> : null}
-      {!sorted.length ? <div className="elite-empty-search">Nenhum registro corresponde à busca. Seu histórico não foi apagado.</div> : null}
+      {!sorted.length ? <div className="elite-empty-search">Nenhum registro corresponde aos filtros atuais.</div> : null}
       {sorted.map((item) => {
         const open = item.id === expandedId;
         const itemSets = item.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0);
@@ -353,7 +385,7 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
               <div className="history-card-copy">
                 <strong>{item.planName}</strong>
                 <span>{formatDate(item.finishedAt, true)} · {formatDuration(item.durationSeconds)}</span>
-                <small>{item.exercises.length} {item.exercises.length === 1 ? 'exercício' : 'exercícios'} · {itemSets} {itemSets === 1 ? 'série' : 'séries'}</small>
+                <small>{item.exercises.length} {item.exercises.length === 1 ? 'exercício' : 'exercícios'} · {item.plannedSetCount ? `${itemSets}/${item.plannedSetCount} séries` : `${itemSets} ${itemSets === 1 ? 'série' : 'séries'}`}</small>
                 {item.recoveryWeekStart ? <small>Reposição · origem: {recoveryWeekLabel(item.recoveryWeekStart)}</small> : null}
               </div>
               <ChevronDown className="chevron" size={20} />
@@ -365,6 +397,7 @@ function HistoryList({ history, weightUnit, onDelete }: Omit<HistoryScreenProps,
                 {item.exercises.map((exercise) => (
                   <div className="history-exercise" key={`${item.id}-${exercise.exerciseId}`}>
                     <strong>{exercise.exerciseName}</strong>
+                    {exercise.restSeconds !== undefined ? <small>Descanso da ficha · {exercise.restSeconds} s</small> : null}
                     <div className="history-set-table">
                       {exercise.sets.map((set) => (
                         <div key={set.id}>

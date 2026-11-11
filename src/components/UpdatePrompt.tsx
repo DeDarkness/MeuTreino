@@ -1,9 +1,10 @@
 import { RefreshCw, WifiOff } from 'lucide-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-export function UpdatePrompt({ workoutInProgress = false }: { workoutInProgress?: boolean }) {
+export function UpdatePrompt({ workoutInProgress = false, saving = false, canReload }: { workoutInProgress?: boolean; saving?: boolean; canReload?: () => boolean }) {
   const interval = useRef<number | undefined>(undefined);
+  const [updateError, setUpdateError] = useState(false);
   useEffect(() => () => window.clearInterval(interval.current), []);
   const {
     offlineReady: [offlineReady, setOfflineReady],
@@ -24,10 +25,14 @@ export function UpdatePrompt({ workoutInProgress = false }: { workoutInProgress?
       {needRefresh ? <RefreshCw size={19} /> : <WifiOff size={19} />}
       <div>
         <strong>{needRefresh ? 'Atualização disponível' : 'Pronto para usar offline'}</strong>
-        <span>{needRefresh ? workoutInProgress ? 'Sua sessão está protegida. Termine o treino para atualizar.' : 'Recarregue para usar a nova versão. Seus registros serão preservados.' : 'O MeuTreino foi salvo neste iPhone.'}</span>
+        <span>{needRefresh ? workoutInProgress ? 'Sua sessão está protegida. Termine o treino para atualizar.' : saving ? 'Aguarde a gravação dos dados.' : updateError ? 'Não foi possível atualizar agora. Tente novamente com internet.' : 'Recarregue para usar a nova versão. Seus registros serão preservados.' : 'O MeuTreino foi salvo neste iPhone.'}</span>
       </div>
       {needRefresh ? (
-        <button type="button" disabled={workoutInProgress} onClick={() => void updateServiceWorker(true)}>Atualizar</button>
+        <button type="button" disabled={workoutInProgress || saving} onClick={() => {
+          if (workoutInProgress || saving || canReload?.() === false) return;
+          setUpdateError(false);
+          void updateServiceWorker(true).catch(() => setUpdateError(true));
+        }}>Atualizar</button>
       ) : (
         <button type="button" aria-label="Fechar" onClick={() => setOfflineReady(false)}>×</button>
       )}

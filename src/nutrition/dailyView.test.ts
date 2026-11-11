@@ -24,6 +24,7 @@ import { NutritionDayView } from "./NutritionDayView";
 import { NutritionFoodSheet } from "./NutritionFoodSheet";
 import { NutritionMealCard } from "./NutritionMealCard";
 import { NutritionSheet } from "./NutritionSheet";
+import { addMealSnapshot, mealSnapshot, recentConsumedMeals } from "./mealSnapshots";
 const today = localDate();
 const seed = () =>
   applyStarterDiet(
@@ -34,6 +35,23 @@ const seed = () =>
     false,
   );
 describe("diário premium e registro sem duplicação", () => {
+  it("repete alimentos com novos IDs e conserva quantidades, totais e registros existentes", () => {
+    const state = seed();
+    const row = state.entries.find((entry) => !entry.preparationOnly)!;
+    const source = setPlannedConsumption(state, row.id, true);
+    const recent = recentConsumedMeals(source.entries, today);
+    expect(recent).toHaveLength(1);
+    const snapshot = mealSnapshot(recent[0].entries);
+    const previousDay = offsetDate(today, -1);
+    const result = addMealSnapshot(source, snapshot, previousDay, "consumed");
+    const copies = result.entries.filter((entry) => entry.date === previousDay);
+    expect(copies).toHaveLength(1);
+    expect(copies[0].planEntryId).toBeUndefined();
+    expect(copies[0].quantity).toBe(row.quantity);
+    expect(totalNutrients(copies)).toEqual(totalNutrients(snapshot));
+    expect(result.entries.filter((entry) => entry.date === today)).toEqual(source.entries);
+    expect(() => addMealSnapshot(source, snapshot, offsetDate(today, 1), "consumed")).toThrow("Consumo futuro");
+  });
   it("une planejado e consumido numa única linha sem contar planejado como ingestão", () => {
     const state = seed();
     const row = state.entries[0];

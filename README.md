@@ -4,6 +4,14 @@ MeuTreino é uma PWA pessoal de academia feita para ser instalada na Tela de In�
 
 ## Recursos
 
+### Elite 8.4.0
+
+O Full Body V-Taper tem etapas selecionáveis de 66, 70 e 74 séries. Evolução reúne avaliações corporais, gráficos e fotos salvas no aparelho. Ajustes oferece backup ZIP com inclusão opcional das imagens, prévia e restauração aditiva. Veja as [notas da versão](RELEASE_NOTES_8_4_0.md).
+
+### Elite 8.3.0
+
+Gravação confirmada pelo IndexedDB, recuperação de sessão, backup JSON com verificação de integridade e uma cópia de segurança local. O registro rápido reaproveita a série anterior com um toque. Evolução reúne indicadores semanais, medidas corporais, sugestões de progressão e calendário do ciclo. A Alimentação permite repetir e favoritar refeições. O histórico gera PDF seletivo com gráficos opcionais. Veja as [notas da versão](RELEASE_NOTES_8_3_0.md) e o [checklist para iPhone](docs/TESTE-SAFARI-8.3.0.md).
+
 ### Elite 8.0 — alimentação integrada
 
 Diário alimentar, planejamento por data, substituições no mesmo grupo com diferenças de nutrientes, catálogo aproximado de 345 alimentos, cadastro por fonte/rótulo, favoritos/modelos, lista de compras, metas manuais, água/sono, medidas corporais, pré-operatório e relatórios CSV/impressão PDF. Sem prescrição automática ou dados pessoais embutidos no código público. O catálogo fornecido é explicitamente **não verificado**; fibras desconhecidas não viram zero. Backup completo inclui o novo módulo sem apagar os treinos ou as reposições; backup antigo de treinos preserva a alimentação atual. Wallpaper passou para Ajustes. Veja [recursos, limites, fontes e migração da 8.0](RELEASE_NOTES_8_0.md).

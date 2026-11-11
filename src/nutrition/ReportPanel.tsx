@@ -10,6 +10,7 @@ import {
 } from "./engine";
 import { display, dateLabel } from "./uiHelpers";
 import { TrendChart } from "./TrendChart";
+import { downloadLocalFile } from "../lib/localFiles";
 
 export function ReportPanel({
   state,
@@ -42,16 +43,7 @@ export function ReportPanel({
     0,
   );
   const exportCsv = () => {
-    const url = URL.createObjectURL(
-      new Blob([reportCsv(state, end, days)], {
-        type: "text/csv;charset=utf-8",
-      }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `meutreino-alimentacao-${end}-${days}dias.csv`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadLocalFile(new File([reportCsv(state, end, days)], `meutreino-alimentacao-${end}-${days}dias.csv`, { type: "text/csv;charset=utf-8" }));
   };
   return (
     <article className="nutrition-card nutrition-report">

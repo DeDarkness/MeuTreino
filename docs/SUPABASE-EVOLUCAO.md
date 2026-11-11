@@ -1,0 +1,10 @@
+# Preparar Supabase para evolução corporal
+
+1. Escolha um projeto Supabase dedicado para testes. Abra o SQL Editor e execute a [migração versionada](../supabase/migrations/202611110001_private_progress.sql) em um projeto onde as tabelas e o bucket ainda não existam.
+2. Em Authentication, crie duas contas de teste separadas e use apenas registros e imagens sintéticos. A integração do app precisa do URL do projeto e da chave publicável. Chaves privilegiadas ficam na administração do projeto.
+3. Confirme que o bucket `progress-photos` é privado, aceita JPEG de até 8 MB e armazena arquivos em `<user_id>/<photo_id>/original.jpg` e `<user_id>/<photo_id>/miniatura.jpg`. Use downloads autenticados. [Controle de acesso do Storage](https://supabase.com/docs/guides/storage/security/access-control)
+4. Autenticado como A, grave uma medida e uma foto de teste. Com sessão B, confirme que SELECT retorna zero linhas, UPDATE e DELETE não atingem os registros, INSERT com o proprietário A é recusado e o download do caminho de A falha. Repita de A para B. Faça o mesmo teste sem autenticação. Valide o bloqueio de associação de uma foto à medida de outra conta. [Políticas RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)
+5. Na integração do cliente, vincule a fila IndexedDB à conta autenticada após prévia e confirmação. Envie por IDs estáveis, use a revisão como condição de atualização e registre a confirmação do servidor. Quando uma revisão divergir, apresente ambas as versões para resolução. Use `deleted_at` até os dispositivos reconhecerem a exclusão. Os arquivos devem ser excluídos pela API do Storage.
+6. Teste gravações offline, retomada ao reconectar, interrupção no meio do upload, duas edições concorrentes, revogação de sessão e troca de conta. Verifique que uma fila criada para A nunca é enviada na sessão B.
+
+Os testes locais executaram a migração em PostgreSQL descartável com duas identidades e uma função de autenticação simulada. A validação por Auth e Storage reais exige o projeto remoto. O app publicado mantém o fluxo local até a integração ser concluída.

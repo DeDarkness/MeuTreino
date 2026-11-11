@@ -2,16 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   createSeedState,
-  clearSafetySnapshot,
+  decodeBackup,
+  exportSafetySnapshot,
   exportState,
-  importState,
-  loadState,
-  saveState,
-  validateAppState,
+  loadStateVersioned,
+  saveStateVersioned,
+  type StoredSnapshot,
 } from '../lib/database';
+import { createWriteQueue } from '../lib/writeQueue';
 import {
   addRestTime,
+  clearExpiredRest as expireRest,
   completeActiveSet,
+  logActiveSet,
   deferActiveExercise,
   duplicateWorkoutPlan,
   finishActiveWorkout,
@@ -30,13 +33,15 @@ import {
   updateActiveWorkoutNotes,
   type ActiveSetPatch,
   type WorkoutPlanInput,
+  type WorkoutFinishResult,
 } from '../lib/workout';
-import type { AppState, Preferences, RecoverySelection, WorkoutHistory, WorkoutPlan } from '../types';
+import type { AppState, Preferences, RecoverySelection, WorkoutPlan } from '../types';
 import { discardRecoveryItem, localWeekKey } from '../lib/recovery';
 import { syncPushRest } from '../lib/pushNotifications';
-import { applyPreSurgicalProtocol, upgradeEliteProtocol } from '../lib/starterPlans';
+import { applyFullBodyProtocol, upgradeEliteProtocol, type FullBodyProtocol } from '../lib/starterPlans';
 import type { NutritionState } from '../nutrition/types';
 import { emptyNutrition } from '../nutrition/engine';
+import type { ProgressPhoto } from '../lib/progressPhotos';
 
 export interface WorkoutStoreActions {
   updateNutrition(change: (current: NutritionState) => NutritionState, checkpoint?: string): Promise<void>;
@@ -49,7 +54,7 @@ export interface WorkoutStoreActions {
   queueMissedPlan(planId: string): Promise<void>;
   updateSet(exerciseId: string, setId: string, patch: ActiveSetPatch): Promise<void>;
   selectSet(exerciseId: string, setId: string): Promise<void>;
-  completeSet(exerciseId: string, setId: string): Promise<void>;
+  completeSet(exerciseId: string, setId: string, patch?: ActiveSetPatch): Promise<void>;
   uncompleteSet(exerciseId: string, setId: string): Promise<void>;
   moveExercise(exerciseId: string, direction: -1 | 1): Promise<void>;
   deferExercise(exerciseId: string): Promise<void>;
@@ -57,14 +62,20 @@ export interface WorkoutStoreActions {
   updateWorkoutNotes(notes: string): Promise<void>;
   addRestSeconds(seconds?: number): Promise<void>;
   skipRest(): Promise<void>;
-  finishWorkout(): Promise<WorkoutHistory>;
+  clearExpiredRest(workoutId: string, restEndsAt: string): Promise<void>;
+  finishWorkout(): Promise<WorkoutFinishResult>;
   abandonWorkout(): Promise<void>;
   deleteHistory(historyId: string): Promise<void>;
   updatePreferences(patch: Partial<Preferences>): Promise<void>;
   importData(source: string | unknown): Promise<AppState>;
   exportData(): Promise<string>;
   clearData(): Promise<void>;
-  installPreSurgicalProtocol(): Promise<void>;
+  installFullBodyProtocol(stage: FullBodyProtocol): Promise<void>;
+  restoreProgressArchive(imported: AppState, photos: ProgressPhoto[], merge: boolean): Promise<void>;
+  restoreCheckpoint(): Promise<void>;
+  reloadSaved(): Promise<void>;
+  canReload(): boolean;
+  updateCycle(cycle: AppState['trainingCycle']): Promise<void>;
 }
 
 export interface WorkoutStore extends WorkoutStoreActions {
@@ -78,8 +89,10 @@ export interface WorkoutStore extends WorkoutStoreActions {
 
 type StateChange = (current: AppState) => AppState;
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : 'Não foi possível salvar os dados locais.';
+const errorMessage = (error: unknown): string => {
+  if (error instanceof Error && error.name === 'QuotaExceededError') return 'Alteração não salva. O armazenamento do aparelho está cheio. Exporte um backup em Ajustes e libere espaço antes de tentar novamente.';
+  return error instanceof Error ? error.message : 'Não foi possível salvar os dados locais.';
+};
 
 export function useWorkoutStore(): WorkoutStore {
   const [state, setState] = useState<AppState | null>(null);
@@ -87,23 +100,26 @@ export function useWorkoutStore(): WorkoutStore {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const pendingWrites = useRef(0);
   const stateRef = useRef<AppState | null>(null);
+  const revisionRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
-  const writeQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const importingRef = useRef(false);
+  const [queue] = useState(createWriteQueue);
+
+  const acceptSaved = useCallback(({ state: saved, revision }: StoredSnapshot) => {
+    revisionRef.current = revision;
+    stateRef.current = saved;
+    void syncPushRest(saved.activeWorkout, saved.preferences.soundEnabled).catch(() => undefined);
+    if (mountedRef.current) { setState(saved); setError(null); }
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
     let cancelled = false;
 
-    void loadState()
+    void loadStateVersioned()
       .then((loaded) => {
         if (cancelled) return;
-        stateRef.current = loaded;
-        setState(loaded);
-        void syncPushRest(loaded.activeWorkout, loaded.preferences.soundEnabled).catch(() => undefined);
-        setError(null);
+        acceptSaved(loaded);
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(errorMessage(cause));
@@ -116,77 +132,26 @@ export function useWorkoutStore(): WorkoutStore {
       cancelled = true;
       mountedRef.current = false;
     };
-  }, []);
+  }, [acceptSaved]);
 
-  const enqueueSave = useCallback((next: AppState, checkpointLabel?: string): Promise<void> => {
-    pendingWrites.current += 1;
+  const runWrite = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
     if (mountedRef.current) setSaving(true);
-    const write = writeQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        await saveState(next, checkpointLabel);
-      });
-    writeQueueRef.current = write;
-    return write.catch((cause: unknown) => {
-      if (mountedRef.current) setError(errorMessage(cause));
+    return queue.run(operation).catch((cause: unknown) => {
+      if (mountedRef.current) setError((prior) => cause instanceof Error && cause.message.startsWith('Uma gravação anterior') && prior ? prior : errorMessage(cause));
       throw cause;
-    }).finally(() => { pendingWrites.current -= 1; if (mountedRef.current && pendingWrites.current === 0) setSaving(false); });
-  }, []);
+    }).finally(() => { if (mountedRef.current && !queue.busy) setSaving(false); });
+  }, [queue]);
 
-  const commit = useCallback(async <T,>(change: (current: AppState) => { state: AppState; result: T; checkpointLabel?: string }, checkpointLabel?: string): Promise<T> => {
-    if (importingRef.current) {
-      const message = 'Aguarde a gravação ou importação terminar.';
-      if (mountedRef.current) setError(message);
-      throw new Error(message);
-    }
+  const commitDurable = useCallback(<T,>(change: (current: AppState) => { state: AppState; result: T } | Promise<{ state: AppState; result: T }>, label?: string): Promise<T> => runWrite(async () => {
     const current = stateRef.current;
     if (!current) throw new Error('Os dados ainda estão sendo carregados.');
-
-    // Compute first and update the ref synchronously. IndexedDB is deliberately
-    // enqueued afterwards, never from inside a React state updater.
-    let changed: { state: AppState; result: T; checkpointLabel?: string };
-    try {
-      changed = change(current);
-      validateAppState(changed.state);
-    } catch (cause) {
-      if (mountedRef.current) setError(errorMessage(cause));
-      throw cause;
-    }
-    stateRef.current = changed.state;
-    // Begin scheduling/cancellation immediately after the tap, before waiting for disk.
-    void syncPushRest(changed.state.activeWorkout, changed.state.preferences.soundEnabled).catch(() => undefined);
-    if (mountedRef.current) {
-      setState(changed.state);
-      setError(null);
-    }
-    await enqueueSave(changed.state, changed.checkpointLabel ?? checkpointLabel);
+    const changed = await change(current);
+    if (changed.state !== current) acceptSaved(await saveStateVersioned(changed.state, { expectedRevision: revisionRef.current, checkpointLabel: label }));
     return changed.result;
-  }, [enqueueSave]);
+  }), [acceptSaved, runWrite]);
 
   const commitState = useCallback((change: StateChange, checkpointLabel?: string): Promise<void> =>
-    commit((current) => ({ state: change(current), result: undefined }), checkpointLabel), [commit]);
-
-  // Queue consumption and session closure must not appear successful before disk commits.
-  const commitDurable = useCallback(async <T,>(change: (current: AppState) => { state: AppState; result: T }, label?: string): Promise<T> => {
-    if (importingRef.current) throw new Error('Aguarde a gravação ou importação terminar.');
-    importingRef.current = true;
-    try {
-      await writeQueueRef.current.catch(() => undefined);
-      const current = stateRef.current;
-      if (!current) throw new Error('Os dados ainda estão carregando.');
-      const changed = change(current);
-      if (changed.state === current) return changed.result;
-      validateAppState(changed.state);
-      await enqueueSave(changed.state, label);
-      stateRef.current = changed.state;
-      void syncPushRest(changed.state.activeWorkout, changed.state.preferences.soundEnabled).catch(() => undefined);
-      if (mountedRef.current) { setState(changed.state); setError(null); }
-      return changed.result;
-    } catch (cause) {
-      if (mountedRef.current) setError(errorMessage(cause));
-      throw cause;
-    } finally { importingRef.current = false; }
-  }, [enqueueSave]);
+    commitDurable((current) => ({ state: change(current), result: undefined }), checkpointLabel), [commitDurable]);
 
   useEffect(() => {
     if (!state) return;
@@ -199,7 +164,7 @@ export function useWorkoutStore(): WorkoutStore {
       midnight.setHours(24, 0, 1, 0);
       timer = setTimeout(reconcile, midnight.getTime() - now.getTime());
       const current = stateRef.current;
-      if (document.hidden || importingRef.current || !current || !missedFullBodyPlans(current, now).length) return;
+      if (document.hidden || queue.busy || !current || !missedFullBodyPlans(current, now).length) return;
       // This is additive bookkeeping, so do not replace the user's safety checkpoint.
       void commitDurable((latest) => ({ state: queueAutomaticFullBodyMisses(latest, now), result: undefined })).catch(() => undefined);
     };
@@ -211,7 +176,7 @@ export function useWorkoutStore(): WorkoutStore {
       window.removeEventListener('focus', reconcile);
       document.removeEventListener('visibilitychange', reconcile);
     };
-  }, [state, commitDurable]);
+  }, [state, queue, commitDurable]);
 
   const startRecovery = useCallback((selections: RecoverySelection[]) => commitDurable((current) => ({
     state: startRecoveryWorkout(current, selections).state, result: undefined,
@@ -230,10 +195,10 @@ export function useWorkoutStore(): WorkoutStore {
   }), checkpoint), [commitDurable]);
 
   const savePlan = useCallback((input: WorkoutPlanInput) =>
-    commit((current) => {
+    commitDurable((current) => {
       const changed = saveWorkoutPlan(current, input);
       return { state: changed.state, result: changed.plan };
-    }), [commit]);
+    }), [commitDurable]);
 
   const deletePlan = useCallback((planId: string) => commitState((current) => ({
     ...current,
@@ -242,10 +207,10 @@ export function useWorkoutStore(): WorkoutStore {
   }), 'Antes de excluir uma ficha'), [commitState]);
 
   const duplicatePlan = useCallback((planId: string) =>
-    commit((current) => {
+    commitDurable((current) => {
       const changed = duplicateWorkoutPlan(current, planId);
       return { state: changed.state, result: changed.plan };
-    }), [commit]);
+    }), [commitDurable]);
 
   const startWorkout = useCallback((planId: string) => commitState((current) =>
     startWorkoutFromPlan(current, planId).state), [commitState]);
@@ -256,8 +221,8 @@ export function useWorkoutStore(): WorkoutStore {
   const selectSet = useCallback((exerciseId: string, setId: string) =>
     commitState((current) => selectActiveSet(current, exerciseId, setId)), [commitState]);
 
-  const completeSet = useCallback((exerciseId: string, setId: string) =>
-    commitState((current) => completeActiveSet(current, exerciseId, setId)), [commitState]);
+  const completeSet = useCallback((exerciseId: string, setId: string, patch?: ActiveSetPatch) =>
+    commitState((current) => patch ? logActiveSet(current, exerciseId, setId, patch) : completeActiveSet(current, exerciseId, setId)), [commitState]);
 
   const uncompleteSet = useCallback((exerciseId: string, setId: string) =>
     commitState((current) => uncompleteActiveSet(current, exerciseId, setId)), [commitState]);
@@ -280,11 +245,12 @@ export function useWorkoutStore(): WorkoutStore {
   const skipCurrentRest = useCallback(() =>
     commitState((current) => skipRest(current)), [commitState]);
 
+  const clearExpiredRest = useCallback((id: string, deadline: string) => commitState((current) => expireRest(current, id, deadline)), [commitState]);
+
   const finishWorkout = useCallback(() =>
     commitDurable((current) => {
-      const changed = finishActiveWorkout(current);
-      const upgraded = upgradeEliteProtocol(changed.state);
-      return { state: upgraded, result: changed.history };
+      const { state: finished, ...result } = finishActiveWorkout(current);
+      return { state: upgradeEliteProtocol(finished), result };
     }, 'Antes de encerrar sessão e guardar pendências'), [commitDurable]);
 
   const abandonWorkout = useCallback(() => commitDurable((current) => {
@@ -305,47 +271,43 @@ export function useWorkoutStore(): WorkoutStore {
     updatedAt: new Date().toISOString(),
   })), [commitState]);
 
-  const importData = useCallback(async (source: string | unknown): Promise<AppState> => {
-    if (importingRef.current) throw new Error('Já existe uma importação em andamento.');
-    importingRef.current = true;
-    let importedState: AppState | null = null;
-    const operation = writeQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        const imported = await importState(source);
-        importedState = imported;
-        stateRef.current = imported;
-        void syncPushRest(imported.activeWorkout, imported.preferences.soundEnabled).catch(() => undefined);
-        if (mountedRef.current) {
-          setState(imported);
-          setError(null);
-        }
-      });
-    writeQueueRef.current = operation;
-    try {
-      await operation;
-      if (!importedState) throw new Error('Não foi possível importar os dados.');
-      return importedState;
-    } catch (cause) {
-      if (mountedRef.current) setError(errorMessage(cause));
-      throw cause;
-    } finally {
-      importingRef.current = false;
-    }
-  }, []);
+  const importData = useCallback((source: string | unknown): Promise<AppState> => commitDurable(async (current) => {
+    if (current.activeWorkout) throw new Error('Encerre o treino em andamento antes de importar um backup.');
+    const decoded = await decodeBackup(source instanceof Blob ? await source.text() : source);
+    const imported = { ...decoded, nutrition: decoded.nutrition ?? current.nutrition ?? emptyNutrition() };
+    return { state: imported, result: imported };
+  }, 'Antes da importação'), [commitDurable]);
 
   const exportData = useCallback(async (): Promise<string> => {
-    await writeQueueRef.current;
+    await queue.idle();
     return exportState();
-  }, []);
+  }, [queue]);
 
-  const installPreSurgicalProtocol = useCallback(async () => {
-    if (!stateRef.current) throw new Error('Os dados ainda estão carregando.');
-    await importData(applyPreSurgicalProtocol(stateRef.current));
-  }, [importData]);
+  const installFullBodyProtocol = useCallback((stage: FullBodyProtocol) => commitState((current) => applyFullBodyProtocol(current, stage), 'Antes da troca de protocolo'), [commitState]);
 
-  const clearData = useCallback(async (): Promise<void> => {
-    if (importingRef.current) throw new Error('Aguarde a importação do backup terminar.');
+  const restoreProgressArchive = useCallback((imported: AppState, photos: ProgressPhoto[], merge: boolean) => runWrite(async () => {
+    const current = stateRef.current;
+    if (!current || current.activeWorkout) throw new Error('Encerre o treino em andamento antes de restaurar um backup.');
+    const { mergeProgressArchive } = await import('../lib/progressArchive');
+    const next = merge ? mergeProgressArchive(current, imported)
+      : { ...imported, nutrition: imported.nutrition ?? current.nutrition ?? emptyNutrition() };
+    acceptSaved(await saveStateVersioned(next, {
+      expectedRevision: revisionRef.current, checkpointLabel: 'Antes de restaurar backup ZIP', addPhotos: photos,
+    }));
+  }), [acceptSaved, runWrite]);
+
+  const restoreCheckpoint = useCallback(() => commitDurable(async (current) => {
+    if (current.activeWorkout) throw new Error('Encerre o treino antes de restaurar a cópia.');
+    const restored = await decodeBackup(await exportSafetySnapshot());
+    return { state: restored, result: undefined };
+  }, 'Antes de restaurar a cópia anterior'), [commitDurable]);
+
+  const reloadSaved = useCallback(() => runWrite(async () => acceptSaved(await loadStateVersioned())), [acceptSaved, runWrite]);
+  const canReload = useCallback(() => !queue.busy && Boolean(stateRef.current) && !stateRef.current?.activeWorkout, [queue]);
+  const updateCycle = useCallback((trainingCycle: AppState['trainingCycle']) => commitState((current) => ({ ...current, trainingCycle }), 'Antes de alterar o ciclo de treino'), [commitState]);
+
+  const clearData = useCallback(() => runWrite(async () => {
+    if (!stateRef.current) throw new Error('Reabra os dados salvos antes de apagar.');
     const seeded = createSeedState();
     const empty: AppState = {
       ...seeded,
@@ -354,15 +316,8 @@ export function useWorkoutStore(): WorkoutStore {
       nutrition: emptyNutrition(),
       activeWorkout: null,
     };
-    stateRef.current = empty;
-    void syncPushRest(null, empty.preferences.soundEnabled).catch(() => undefined);
-    if (mountedRef.current) {
-      setState(empty);
-      setError(null);
-    }
-    await enqueueSave(empty);
-    await clearSafetySnapshot();
-  }, [enqueueSave]);
+    acceptSaved(await saveStateVersioned(empty, { expectedRevision: revisionRef.current, clearAll: true }));
+  }), [acceptSaved, runWrite]);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -385,6 +340,7 @@ export function useWorkoutStore(): WorkoutStore {
     updateWorkoutNotes,
     addRestSeconds,
     skipRest: skipCurrentRest,
+    clearExpiredRest,
     finishWorkout,
     abandonWorkout,
     deleteHistory,
@@ -392,13 +348,24 @@ export function useWorkoutStore(): WorkoutStore {
     importData,
     exportData,
     clearData,
-    installPreSurgicalProtocol,
+    installFullBodyProtocol,
+    restoreProgressArchive,
+    restoreCheckpoint,
+    reloadSaved,
+    canReload,
+    updateCycle,
   }), [
     updateNutrition,
     abandonWorkout,
     addRestSeconds,
     clearData,
-    installPreSurgicalProtocol,
+    clearExpiredRest,
+    restoreCheckpoint,
+    reloadSaved,
+    canReload,
+    updateCycle,
+    installFullBodyProtocol,
+    restoreProgressArchive,
     completeSet,
     deferExercise,
     deleteHistory,

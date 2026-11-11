@@ -184,19 +184,68 @@ export function installWeeklyWorkoutPlans(state: AppState, now = new Date().toIS
   };
 }
 
+export type FullBodyProtocol = 66 | 70 | 74;
+
+export function createVTaperPlans(stage: FullBodyProtocol, now = new Date().toISOString()): WorkoutPlan[] {
+  const base = createWeeklyWorkoutPlans(now);
+  if (stage === 66) return base;
+  const [a, b, c] = base;
+  const scott = exercise({ id: 'vtaper-a-scott', name: 'Rosca Scott unilateral com halter', sets: 1, minReps: 10, reps: 15, restSeconds: 90, rir: '2', muscleGroup: 'biceps', guidance: 'Uma série inclui os dois lados.' });
+  const testa = exercise({ id: 'vtaper-a-testa', name: 'Tríceps testa com halteres', sets: 1, minReps: 10, reps: 15, restSeconds: 90, rir: '2', muscleGroup: 'triceps' });
+  const peckDeck = exercise({ id: 'vtaper-b-peck-deck', name: 'Peck deck', sets: 2, minReps: 10, reps: 15, restSeconds: 90, rir: '1–2', muscleGroup: 'peito' });
+  const inclinada = exercise({ id: 'vtaper-b-rosca-inclinada', name: 'Rosca inclinada com dois halteres', sets: 1, minReps: 10, reps: 15, restSeconds: 90, rir: '2', muscleGroup: 'biceps', guidance: 'Sentado, com as costas apoiadas no banco inclinado.' });
+  const inverso = exercise({ id: 'vtaper-c-inverso', name: 'Crucifixo inverso na polia cruzada', sets: 1, minReps: 12, reps: 20, restSeconds: 75, rir: '1–2', muscleGroup: 'deltoide_posterior', guidance: 'Cabos cruzados em X na altura dos olhos ou ombros. Descanso de 75 a 90 s.' });
+  const unilateral = exercise({ id: 'vtaper-c-rosca-unilateral', name: 'Rosca direta unilateral na polia', sets: 1, minReps: 10, reps: 15, restSeconds: 90, rir: '2', muscleGroup: 'biceps', guidance: 'Uma série inclui os dois lados.' });
+  const testaPolia = exercise({ id: 'vtaper-c-testa-polia', name: 'Tríceps testa na polia', sets: 1, minReps: 10, reps: 15, restSeconds: 90, rir: '2', muscleGroup: 'triceps' });
+  const full = stage === 74;
+  const ordered = (plan: WorkoutPlan, ids: string[]) => ids.map((id) => {
+    const item = plan.exercises.find((entry) => entry.id === id);
+    if (!item) throw new Error(`Exercício ausente na ficha ${plan.name}: ${id}`);
+    return item;
+  });
+  const [leg, pull, press, curl, development, reverse, lateral, biceps, triceps, crunch, calf] = ordered(b, [
+    'terca-leg-press', 'quarta-puxada-alta', 'segunda-supino-reto', 'sexta-cadeira-flexora', 'quinta-desenvolvimento',
+    'quinta-fly-reverso', 'b-elevacao-lateral', 'full-body-b-rosca-polia', 'full-body-b-triceps-corda', 'full-body-b-abdomen', 'b-panturrilha-sentado',
+  ]);
+  const [row, bulgarian, chest, pulldown, flexora, extensora, raise, hammer, rope, calves] = ordered(c, [
+    'quarta-serrote', 'terca-bulgaro', 'segunda-supino-declinado', 'quarta-pulldown', 'sexta-cadeira-flexora',
+    'terca-cadeira-extensora', 'quinta-elevacao-lateral-polia', 'sabado-martelo', 'sabado-barra-w', 'sexta-panturrilha',
+  ]);
+  const withExercises = (plan: WorkoutPlan, focus: string, exercises: Exercise[]): WorkoutPlan => ({
+    ...plan, exercises,
+    notes: `V-Taper ${stage} · ${exercises.reduce((total, item) => total + item.targetSets, 0)} séries · ${focus}`,
+  });
+  return [
+    withExercises(a, 'largura dorsal, quadríceps e braços', [
+      ...ordered(a, ['full-body-a-puxada-neutra', 'terca-hack', 'quarta-remada-maquina', 'segunda-supino-inclinado-halteres', 'sexta-stiff',
+        'segunda-elevacao-lateral', 'quarta-rosca-direta-halter', 'sabado-frances-polia']),
+      scott, ...(full ? [testa] : []), ...ordered(a, ['terca-panturrilha', 'full-body-a-abdomen']),
+    ]),
+    withExercises(b, 'pernas, costas, peito e ombros', [
+      leg, pull, press, peckDeck, curl, development, reverse, lateral, biceps, ...(full ? [inclinada] : []), triceps, crunch, calf,
+    ]),
+    withExercises(c, 'espessura dorsal, braços e deltoide posterior', [
+      row, bulgarian, chest, pulldown, flexora, extensora, inverso, raise,
+      { ...hammer, name: 'Rosca martelo sentado', notes: `${hammer.notes} · Tronco estável.` },
+      rope, ...(full ? [unilateral, testaPolia] : []), calves,
+    ]),
+  ];
+}
+
 /** Instalação explícita evita substituir fichas editadas silenciosamente durante atualizações. */
 export function applyPreSurgicalProtocol(state: AppState, now = new Date().toISOString()): AppState {
+  return applyFullBodyProtocol(state, 66, now);
+}
+
+export function applyFullBodyProtocol(state: AppState, stage: FullBodyProtocol, now = new Date().toISOString()): AppState {
   if (state.activeWorkout) {
     throw new Error('Finalize ou abandone a sessão atual antes de trocar o protocolo.');
   }
   const bundledIds = new Set(['plan-full-body-a', 'plan-full-body-b', 'plan-full-body-c']);
+  const presets = ([66, 70, 74] as const).flatMap((step) => createVTaperPlans(step, now));
   const archivedPersonalized = state.plans
-    .filter((plan) => {
-      const bundled = createWeeklyWorkoutPlans(now).find((item) => item.id === plan.id);
-      return bundledIds.has(plan.id) && (plan.name !== bundled?.name
-        || plan.notes !== bundled?.notes
-        || JSON.stringify(plan.exercises) !== JSON.stringify(bundled?.exercises));
-    })
+    .filter((plan) => bundledIds.has(plan.id) && !presets.some((preset) => preset.id === plan.id
+      && preset.name === plan.name && preset.notes === plan.notes && JSON.stringify(preset.exercises) === JSON.stringify(plan.exercises)))
     .map((plan) => ({
       ...plan,
       id: `plan-arquivo-${plan.id}-${now.replace(/\W/g, '')}`,
@@ -206,7 +255,7 @@ export function applyPreSurgicalProtocol(state: AppState, now = new Date().toISO
     ...state,
     eliteProtocolVersion: ELITE_PROTOCOL_VERSION,
     plans: [
-      ...createWeeklyWorkoutPlans(now),
+      ...createVTaperPlans(stage, now).map((plan) => ({ ...plan, createdAt: state.plans.find((old) => old.id === plan.id)?.createdAt ?? now })),
       ...archivedPersonalized,
       ...state.plans.filter((plan) => !bundledIds.has(plan.id)),
     ],

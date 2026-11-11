@@ -13,7 +13,12 @@ export function useWorkoutClock() {
     };
     sync();
     document.addEventListener('visibilitychange', sync);
-    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', sync); };
+    window.addEventListener('pageshow', sync);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('pageshow', sync);
+    };
   }, []);
   return now;
 }

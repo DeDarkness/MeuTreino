@@ -49,6 +49,21 @@ describe('evolução do treino', () => {
   });
 
   const target = { id: 'supino', name: 'Supino reto', targetSets: 3, targetReps: 10, targetRirMin: 2 };
+  it('sugere uma repetição gradual quando a faixa e o RIR permitem', () => {
+    const copy = structuredClone(history);
+    copy[0].exercises[0].sets.forEach((set) => { set.reps = 8; });
+    expect(getProgressionAdvice(copy, { ...target, minReps: 6 }, 'kg')).toMatchObject({ repSuggestion: 9 });
+    expect(getLoadSuggestion(copy, target, 'kg')).toBeNull();
+  });
+
+  it('usa apenas sessões comparáveis para confirmar a progressão', () => {
+    const previous = structuredClone(history[0]);
+    previous.id = 'history-0';
+    previous.finishedAt = '2026-08-31T13:00:00.000Z';
+    previous.exercises[0].sets[0].rir = 1;
+    expect(getLoadSuggestion([...history, previous], target, 'kg')).toBeNull();
+    expect(getLoadSuggestion([...history, { ...previous, trainingMode: 'express' }], target, 'kg')).toMatchObject({ referenceSessions: 1 });
+  });
   it.each([null, undefined, 0, 1])('não recomenda subir sem RIR adequado: %s', (rir) => {
     const copy = structuredClone(history);
     copy[0].exercises[0].sets[1].rir = rir;

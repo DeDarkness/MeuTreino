@@ -15,13 +15,16 @@ import { createWeeklyWorkoutPlans, installWeeklyWorkoutPlans, STARTER_PLAN_VERSI
 import { isWeekKey, MAX_RECOVERY_SETS, MAX_RECOVERY_SETS_PER_EXERCISE, MAX_SAVED_RECOVERY_ITEMS } from './recovery';
 import { emptyNutrition } from '../nutrition/engine';
 import { validateNutrition } from '../nutrition/validation';
+import { isTrainingCycle } from './trainingTimeline';
+import { validateProgressPhoto, type ProgressPhoto } from './progressPhotos';
 
 const DATABASE_NAME = 'meutreino';
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const STATE_STORE = 'state';
 const STATE_KEY = 'app-state';
 const SAFETY_KEY = 'safety-checkpoint-v1';
 const WALLPAPER_STORE = 'wallpaper';
+const PHOTO_STORE = 'progress-photos';
 const WALLPAPER_KEY = 'active-wallpaper' as const;
 const BACKUP_VERSION = 1 as const;
 const MAX_EXERCISES_PER_PLAN = 20;
@@ -34,7 +37,22 @@ const MAX_WALLPAPER_BYTES = 150 * 1024 * 1024;
 type StoredStateRecord = {
   id: typeof STATE_KEY;
   value: AppState;
+  revision?: string;
 };
+
+export type StoredSnapshot = { state: AppState; revision: string };
+type WriteOptions = { checkpointLabel?: string; expectedRevision?: string | null; clearAll?: boolean; addPhotos?: readonly ProgressPhoto[] };
+
+export class StorageConflictError extends Error {
+  constructor() {
+    super('Outra aba ou janela salvou dados mais recentes. Esta alteração não foi gravada. Reabra os dados salvos antes de tentar novamente.');
+    this.name = 'StorageConflictError';
+  }
+}
+
+const recordRevision = (record?: StoredStateRecord) => record
+  ? record.revision ?? `legacy:${String(record.value?.updatedAt)}`
+  : null;
 
 export class DatabaseValidationError extends Error {
   readonly issues: string[];
@@ -157,6 +175,7 @@ function validateHistoryExercise(
   validateOptionalMetadata(value, path, issues);
   if (!isNonEmptyString(value.exerciseId)) issues.push(`${path}.exerciseId é obrigatório`);
   if (!isNonEmptyString(value.exerciseName)) issues.push(`${path}.exerciseName é obrigatório`);
+  if (value.restSeconds !== undefined && (!isNonNegativeInteger(value.restSeconds) || value.restSeconds > MAX_REST_SECONDS)) issues.push(`${path}.restSeconds inválido`);
   if (!Array.isArray(value.sets)) {
     issues.push(`${path}.sets deve ser uma lista`);
   } else {
@@ -181,6 +200,7 @@ function validateHistory(value: unknown, path: string, issues: string[]): value 
   if (!isIsoDate(value.startedAt)) issues.push(`${path}.startedAt deve ser uma data válida`);
   if (!isIsoDate(value.finishedAt)) issues.push(`${path}.finishedAt deve ser uma data válida`);
   if (!isNonNegativeInteger(value.durationSeconds)) issues.push(`${path}.durationSeconds deve ser um inteiro não negativo`);
+  if (value.plannedSetCount !== undefined && (!isNonNegativeInteger(value.plannedSetCount) || value.plannedSetCount > MAX_SETS_PER_EXERCISE * MAX_EXERCISES_PER_PLAN)) issues.push(`${path}.plannedSetCount inválido`);
   if (!Array.isArray(value.exercises)) {
     issues.push(`${path}.exercises deve ser uma lista`);
   } else {
@@ -296,6 +316,7 @@ function validatePreferences(value: unknown, path: string, issues: string[]): va
   if (value.restAlertSound !== 'bell' && value.restAlertSound !== 'beep') issues.push(`${path}.restAlertSound é inválido`);
   if (value.weightUnit !== 'kg' && value.weightUnit !== 'lb') issues.push(`${path}.weightUnit é inválido`);
   if (value.reduceMotion !== undefined && typeof value.reduceMotion !== 'boolean') issues.push(`${path}.reduceMotion inválido`);
+  if (value.showProgressPhotoOnHome !== undefined && typeof value.showProgressPhotoOnHome !== 'boolean') issues.push(`${path}.showProgressPhotoOnHome inválido`);
   if (value.weeklyPlanModes !== undefined && (!isRecord(value.weeklyPlanModes)
     || Object.keys(value.weeklyPlanModes).length > 200
     || Object.values(value.weeklyPlanModes).some((mode) => mode !== 'complete' && mode !== 'express'))) issues.push(`${path}.weeklyPlanModes inválido`);
@@ -410,6 +431,7 @@ export function validateAppState(value: unknown): AppState {
   }
   if (value.activeWorkout !== null) validateActiveWorkout(value.activeWorkout, 'activeWorkout', issues);
   validateRecoveryState(value, issues);
+  if (value.trainingCycle !== undefined && !isTrainingCycle(value.trainingCycle)) issues.push('trainingCycle inválido');
   validatePreferences(value.preferences, 'preferences', issues);
   if (value.nutrition !== undefined) {
     try { validateNutrition(value.nutrition); } catch (cause) { issues.push(cause instanceof Error ? cause.message : 'Alimentação inválida'); }
@@ -452,6 +474,7 @@ function openDatabase(): Promise<IDBDatabase> {
   }
 
   return new Promise((resolve, reject) => {
+    let blocked = false;
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
     request.onupgradeneeded = () => {
       const database = request.result;
@@ -461,14 +484,21 @@ function openDatabase(): Promise<IDBDatabase> {
       if (!database.objectStoreNames.contains(WALLPAPER_STORE)) {
         database.createObjectStore(WALLPAPER_STORE, { keyPath: 'id' });
       }
+      if (!database.objectStoreNames.contains(PHOTO_STORE)) {
+        database.createObjectStore(PHOTO_STORE, { keyPath: 'id' });
+      }
     };
     request.onsuccess = () => {
       const database = request.result;
+      if (blocked) { database.close(); return; }
       database.onversionchange = () => database.close();
       resolve(database);
     };
     request.onerror = () => reject(request.error ?? new Error('Não foi possível abrir o banco local.'));
-    request.onblocked = () => reject(new Error('Feche outras abas do MeuTreino para atualizar o banco local.'));
+    request.onblocked = () => {
+      blocked = true;
+      reject(new Error('Feche outras abas do MeuTreino para atualizar o banco local.'));
+    };
   });
 }
 
@@ -482,23 +512,72 @@ function readRecord(database: IDBDatabase): Promise<StoredStateRecord | undefine
   });
 }
 
-function writeRecord(database: IDBDatabase, state: AppState, checkpointLabel?: string): Promise<void> {
+function writeRecord(database: IDBDatabase, state: AppState, options: WriteOptions = {}): Promise<string> {
   return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STATE_STORE, 'readwrite');
+    const stores = [STATE_STORE];
+    if (options.clearAll) stores.push(WALLPAPER_STORE);
+    if (options.clearAll || options.addPhotos?.length) stores.push(PHOTO_STORE);
+    const transaction = database.transaction(stores, 'readwrite');
     const store = transaction.objectStore(STATE_STORE);
-    const put = () => store.put({ id: STATE_KEY, value: state } satisfies StoredStateRecord);
-    if (checkpointLabel) {
-      const previous = store.get(STATE_KEY);
-      previous.onsuccess = () => {
+    const revision = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let cause: unknown;
+    const previous = store.get(STATE_KEY);
+    previous.onsuccess = () => {
+      try {
         const record = previous.result as StoredStateRecord | undefined;
-        if (record) store.put({ id: SAFETY_KEY, value: record.value, label: checkpointLabel, createdAt: new Date().toISOString() });
-        put();
-      };
-    } else put();
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error ?? new Error('Não foi possível salvar os dados locais.'));
-    transaction.onabort = () => reject(transaction.error ?? new Error('A gravação dos dados locais foi cancelada.'));
+        if (options.expectedRevision !== undefined && recordRevision(record) !== options.expectedRevision) throw new StorageConflictError();
+        if (options.clearAll) {
+          store.delete(SAFETY_KEY);
+          transaction.objectStore(WALLPAPER_STORE).delete(WALLPAPER_KEY);
+          transaction.objectStore(PHOTO_STORE).clear();
+        } else if (record && options.checkpointLabel) {
+          store.put({ id: SAFETY_KEY, value: record.value, label: options.checkpointLabel, createdAt: new Date().toISOString() });
+        }
+        for (const photo of options.addPhotos ?? []) {
+          const photos = transaction.objectStore(PHOTO_STORE);
+          const existing = photos.getKey(photo.id);
+          existing.onsuccess = () => { if (existing.result === undefined) photos.add(photo); };
+        }
+        store.put({ id: STATE_KEY, value: state, revision } satisfies StoredStateRecord);
+      } catch (error) { cause = error; transaction.abort(); }
+    };
+    transaction.oncomplete = () => resolve(revision);
+    // Request errors abort the entire transaction. Wait for that rollback before releasing the queue.
+    transaction.onabort = () => reject(cause ?? transaction.error ?? new Error('A gravação dos dados locais foi cancelada.'));
   });
+}
+
+export async function listProgressPhotos(): Promise<ProgressPhoto[]> {
+  const database = await openDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = database.transaction(PHOTO_STORE, 'readonly');
+      const request = transaction.objectStore(PHOTO_STORE).getAll();
+      transaction.oncomplete = () => resolve(request.result as ProgressPhoto[]);
+      transaction.onabort = () => reject(transaction.error ?? new Error('Não foi possível abrir as fotografias.'));
+    });
+  } finally { database.close(); }
+}
+
+async function changeProgressPhoto(change: (store: IDBObjectStore) => void) {
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction(PHOTO_STORE, 'readwrite');
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error ?? new Error('Não foi possível salvar a fotografia.'));
+      change(transaction.objectStore(PHOTO_STORE));
+    });
+  } finally { database.close(); }
+}
+
+export function addProgressPhoto(photo: ProgressPhoto) {
+  validateProgressPhoto(photo);
+  return changeProgressPhoto((store) => { store.add(photo); });
+}
+
+export function deleteProgressPhoto(id: string) {
+  return changeProgressPhoto((store) => { store.delete(id); });
 }
 
 function wallpaperKind(file: File): WallpaperAsset['kind'] | null {
@@ -566,7 +645,7 @@ export async function removeWallpaper(): Promise<void> {
   }
 }
 
-export async function loadState(): Promise<AppState> {
+export async function loadStateVersioned(retry = true): Promise<StoredSnapshot> {
   const database = await openDatabase();
   try {
     const stored = await readRecord(database);
@@ -576,29 +655,40 @@ export async function loadState(): Promise<AppState> {
       if (upgraded.nutrition === undefined) {
         upgraded = { ...upgraded, nutrition: emptyNutrition() };
       }
-      if (upgraded !== validated) await writeRecord(database, upgraded, validated.nutrition === undefined ? 'Antes de ativar Alimentação v1' : 'Antes da atualização das fichas');
-      return cloneState(upgraded);
+      const revision = upgraded !== validated
+        ? await writeRecord(database, upgraded, { expectedRevision: recordRevision(stored), checkpointLabel: validated.nutrition === undefined ? 'Antes de ativar Alimentação v1' : 'Antes da atualização das fichas' })
+        : recordRevision(stored)!;
+      return { state: cloneState(upgraded), revision };
     }
 
     const seeded = { ...createSeedState(), nutrition: emptyNutrition() };
-    await writeRecord(database, seeded);
-    return cloneState(seeded);
+    const revision = await writeRecord(database, seeded, { expectedRevision: null });
+    return { state: cloneState(seeded), revision };
+  } catch (error) {
+    if (retry && error instanceof StorageConflictError) return loadStateVersioned(false);
+    throw error;
+  } finally {
+    database.close();
+  }
+}
+
+export async function loadState(): Promise<AppState> { return (await loadStateVersioned()).state; }
+
+export async function saveStateVersioned(state: AppState, options: WriteOptions = {}): Promise<StoredSnapshot> {
+  const timestamp = new Date().toISOString();
+  const validated = validateAppState({ ...state, updatedAt: timestamp });
+  const next = cloneState(installWeeklyWorkoutPlans(validated, timestamp));
+  const database = await openDatabase();
+  try {
+    const revision = await writeRecord(database, next, options);
+    return { state: cloneState(next), revision };
   } finally {
     database.close();
   }
 }
 
 export async function saveState(state: AppState, checkpointLabel?: string): Promise<AppState> {
-  const timestamp = new Date().toISOString();
-  const validated = validateAppState({ ...state, updatedAt: timestamp });
-  const next = cloneState(installWeeklyWorkoutPlans(validated, timestamp));
-  const database = await openDatabase();
-  try {
-    await writeRecord(database, next, checkpointLabel);
-    return cloneState(next);
-  } finally {
-    database.close();
-  }
+  return (await saveStateVersioned(state, { checkpointLabel })).state;
 }
 
 export async function resetState(): Promise<AppState> {
@@ -612,18 +702,26 @@ export async function resetState(): Promise<AppState> {
   }
 }
 
-export async function exportState(): Promise<string> {
-  const state = await loadState();
+async function stateChecksum(state: unknown): Promise<string | undefined> {
+  if (!globalThis.crypto?.subtle) return undefined;
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(state)));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function encodeBackup(state: AppState, exportedAt = new Date().toISOString()): Promise<string> {
   const backup: AppStateBackup = {
     app: 'MeuTreino',
     backupVersion: BACKUP_VERSION,
-    exportedAt: new Date().toISOString(),
+    exportedAt,
+    stateSha256: await stateChecksum(state),
     state,
   };
   return JSON.stringify(backup, null, 2);
 }
 
-export async function importState(source: string | unknown): Promise<AppState> {
+export async function exportState(): Promise<string> { return encodeBackup(await loadState()); }
+
+export async function decodeBackup(source: string | unknown): Promise<AppState> {
   let parsed: unknown = source;
   if (typeof source === 'string') {
     try {
@@ -639,15 +737,25 @@ export async function importState(source: string | unknown): Promise<AppState> {
     if (parsed.backupVersion !== BACKUP_VERSION) throw new DatabaseValidationError(['versão de backup incompatível']);
     if (!isIsoDate(parsed.exportedAt)) throw new DatabaseValidationError(['exportedAt deve ser uma data válida']);
     candidate = parsed.state;
+    if (parsed.stateSha256 !== undefined) {
+      if (typeof parsed.stateSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(parsed.stateSha256) || await stateChecksum(candidate) !== parsed.stateSha256) {
+        throw new DatabaseValidationError(['a verificação de integridade falhou; use o arquivo original de backup']);
+      }
+    }
   }
+  return validateAppState(candidate);
+}
 
-  let imported = validateAppState(candidate);
+export async function importState(source: string | unknown): Promise<AppState> {
+  let imported = await decodeBackup(source);
+  const database = await openDatabase();
+  let current: StoredStateRecord | undefined;
+  try { current = await readRecord(database); } finally { database.close(); }
   // A training-only legacy backup must not silently erase the newer nutrition journal.
   if (imported.nutrition === undefined) {
-    const existing = await loadState();
-    imported = { ...imported, nutrition: existing.nutrition ?? emptyNutrition() };
+    imported = { ...imported, nutrition: current ? validateAppState(current.value).nutrition ?? emptyNutrition() : emptyNutrition() };
   }
-  return saveState(imported, 'Antes da importação ou troca de protocolo');
+  return (await saveStateVersioned(imported, { expectedRevision: recordRevision(current), checkpointLabel: 'Antes da importação ou troca de protocolo' })).state;
 }
 
 export async function readSafetySnapshot(): Promise<{ value: AppState; label: string; createdAt: string } | null> {
@@ -664,7 +772,7 @@ export async function readSafetySnapshot(): Promise<{ value: AppState; label: st
 export async function exportSafetySnapshot(): Promise<string> {
   const checkpoint = await readSafetySnapshot();
   if (!checkpoint) throw new Error('Nenhuma cópia de segurança local está disponível.');
-  return JSON.stringify({ app: 'MeuTreino', backupVersion: BACKUP_VERSION, exportedAt: checkpoint.createdAt, state: validateAppState(checkpoint.value) } satisfies AppStateBackup, null, 2);
+  return encodeBackup(validateAppState(checkpoint.value), checkpoint.createdAt);
 }
 
 export async function clearSafetySnapshot(): Promise<void> {

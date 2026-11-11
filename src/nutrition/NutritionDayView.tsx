@@ -36,6 +36,7 @@ import { NutritionFoodSheet } from "./NutritionFoodSheet";
 import { MealSwapSheet } from "./MealSwapSheet";
 import { NutritionSheet } from "./NutritionSheet";
 import { EntryEditor } from "./EntryEditor";
+import { MealReuse } from "./MealReuse";
 import {
   ActionDialog,
   type ActionConfirmation,
@@ -441,6 +442,7 @@ export function NutritionDayView({
           );
         })}
       </div>
+      <MealReuse key={date} state={state} date={date} mode={mode} change={change} />
       {!meals.length && date < today ? (
         <div className="premium-empty-history">
           <Leaf size={28} />

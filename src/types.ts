@@ -53,6 +53,7 @@ export interface WorkoutExerciseHistory {
   exerciseName: string;
   /** Snapshot: future plan edits must not rewrite completed muscle volume. */
   muscleGroup?: MuscleGroup;
+  restSeconds?: number;
   sets: WorkoutSetHistory[];
 }
 
@@ -63,6 +64,7 @@ export interface WorkoutHistory {
   startedAt: IsoDateString;
   finishedAt: IsoDateString;
   durationSeconds: number;
+  plannedSetCount?: number;
   exercises: WorkoutExerciseHistory[];
   notes?: string;
   trainingMode?: 'complete' | 'express';
@@ -142,6 +144,7 @@ export interface RecoverySelection {
 }
 
 export interface Preferences {
+  showProgressPhotoOnHome?: boolean;
   defaultRestSeconds: number;
   soundEnabled: boolean;
   vibrationEnabled: boolean;
@@ -165,6 +168,8 @@ export interface AppState {
   recoveryItems?: RecoveryItem[];
   /** Current-week anti-duplication ledger, including sessions ended with zero sets. */
   queuedMissedPlans?: string[];
+  /** Calendar annotations only; never changes prescriptions or Dia D. */
+  trainingCycle?: { startWeek: string; weeks: number; recoveryWeeks: string[] };
   activeWorkout: ActiveWorkout | null;
   preferences: Preferences;
   updatedAt: IsoDateString;
@@ -174,6 +179,7 @@ export interface AppStateBackup {
   app: 'MeuTreino';
   backupVersion: 1;
   exportedAt: IsoDateString;
+  stateSha256?: string;
   state: AppState;
 }
 

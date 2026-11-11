@@ -1,0 +1,8 @@
+.vtaper-dashboard { display: grid; gap: 10px; }
+.vtaper-dashboard ul, .vtaper-dashboard dl { padding: 0; margin: 0; display: grid; gap: 8px; }
+.vtaper-dashboard ul { list-style: none; }
+.vtaper-dashboard li, .vtaper-dashboard dl > div { display: grid; gap: 4px; border: 1px solid var(--line); padding: 10px; border-radius: 12px; }
+.vtaper-dashboard dl { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.vtaper-dashboard dt, .vtaper-dashboard small { color: var(--muted-strong); }
+.vtaper-dashboard dd { margin: 0; font-weight: 700; }
+.vtaper-home-photo img { display: block; width: 116px; max-width: 100%; border-radius: 12px; }

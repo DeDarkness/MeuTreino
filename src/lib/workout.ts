@@ -9,7 +9,7 @@ import type {
   RecoveryItem,
   RecoverySelection,
 } from '../types';
-import { chooseRecoveryItems, hasWeeklyPlanRecord, isAutomaticMissFor, localWeekKey, MAX_SAVED_RECOVERY_ITEMS, settleRecoveryItems } from './recovery';
+import { chooseRecoveryItems, hasWeeklyPlanRecord, isAutomaticMissFor, localWeekKey, MAX_SAVED_RECOVERY_ITEMS, savedRecoverySets, settleRecoveryItems } from './recovery';
 import { FULL_BODY_DAYS } from './starterPlans';
 
 export type ExerciseInput = Omit<Exercise, 'id'> & { id?: string };
@@ -305,6 +305,9 @@ export function completeActiveSet(
     : -1;
   if (exerciseIndex < 0 || setIndex < 0) throw new Error('Série não encontrada.');
 
+  if (workout.exercises[exerciseIndex].sets[setIndex].completed) return state;
+  if (workout.exercises[exerciseIndex].skipped) throw new Error('Reative o exercício antes de concluir a série.');
+
   if (workout.exercises[exerciseIndex].sets[setIndex].reps < 1) throw new Error('Informe pelo menos uma repetição antes de concluir a série, ou pule o exercício.');
   const now = nowDate.toISOString();
   const exercises = workout.exercises.map((exercise, index) => index !== exerciseIndex
@@ -340,6 +343,12 @@ export function completeActiveSet(
     },
     updatedAt: now,
   };
+}
+
+export function logActiveSet(state: AppState, exerciseId: string, setId: string, patch: ActiveSetPatch, now = new Date()) {
+  const set = state.activeWorkout?.exercises.find((exercise) => exercise.exerciseId === exerciseId)?.sets.find((item) => item.id === setId);
+  if (set?.completed) return state;
+  return completeActiveSet(updateActiveSet(state, exerciseId, setId, patch, now.toISOString()), exerciseId, setId, now);
 }
 
 export function uncompleteActiveSet(
@@ -491,6 +500,12 @@ export function addRestTime(state: AppState, seconds = 15, nowDate = new Date())
   };
 }
 
+export function clearExpiredRest(state: AppState, workoutId: string, deadline: string, now = Date.now()): AppState {
+  const workout = state.activeWorkout;
+  if (workout?.id !== workoutId || workout.restEndsAt !== deadline || !(Date.parse(deadline) <= now)) return state;
+  return skipRest(state, new Date(now).toISOString());
+}
+
 export function skipRest(state: AppState, now = new Date().toISOString()): AppState {
   if (!state.activeWorkout) return state;
   return {
@@ -506,10 +521,15 @@ export function skipRest(state: AppState, now = new Date().toISOString()): AppSt
   };
 }
 
+export interface WorkoutFinishResult {
+  history: WorkoutHistory;
+  recovery: { week: string; sets: number } | null;
+}
+
 export function finishActiveWorkout(
   state: AppState,
   nowDate = new Date(),
-): { state: AppState; history: WorkoutHistory } {
+): { state: AppState } & WorkoutFinishResult {
   const workout = state.activeWorkout;
   if (!workout) throw new Error('Nenhum treino está em andamento.');
   const finishedAt = nowDate.toISOString();
@@ -528,10 +548,12 @@ export function finishActiveWorkout(
     durationSeconds: Number.isFinite(startedAtMs)
       ? Math.max(0, Math.round((nowDate.getTime() - startedAtMs) / 1000))
       : 0,
+    plannedSetCount: workout.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0),
     exercises: workout.exercises
       .map((exercise) => ({
         exerciseId: exercise.sourceExerciseId ?? exercise.exerciseId,
         exerciseName: exercise.exerciseName,
+        restSeconds: exercise.restSeconds,
         ...(exercise.muscleGroup ? { muscleGroup: exercise.muscleGroup } : {}),
         sets: exercise.sets
           .filter((set) => set.completed)
@@ -552,7 +574,10 @@ export function finishActiveWorkout(
     for (const exercise of history.exercises) {
       const key = `${exercise.exerciseId}::${exercise.exerciseName}::${exercise.muscleGroup ?? ''}`;
       const previous = grouped.get(key);
-      if (previous) previous.sets.push(...exercise.sets);
+      if (previous) {
+        previous.sets.push(...exercise.sets);
+        if (previous.restSeconds !== exercise.restSeconds) delete previous.restSeconds;
+      }
       else grouped.set(key, exercise);
     }
     // Preserve original set numbers so the next normal session can restore loads by set.
@@ -570,6 +595,7 @@ export function finishActiveWorkout(
   const currentWeek = localWeekKey(nowDate);
   const ledger = (state.queuedMissedPlans ?? []).filter((key) => key.startsWith(`${currentWeek}::`) || key.startsWith(`${week}::`));
   if (!workout.recoveryItemIds && workout.planId) ledger.push(`${week}::${workout.planId}`);
+  const pendingSets = savedRecoverySets(recoveryItems.filter((item) => item.weekStart === week));
   return {
     state: {
       ...state,
@@ -580,6 +606,7 @@ export function finishActiveWorkout(
       updatedAt: finishedAt,
     },
     history,
+    recovery: pendingSets ? { week, sets: pendingSets } : null,
   };
 }
 

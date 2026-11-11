@@ -17,3 +17,17 @@
 .history-card-check input { margin: 0; width: 20px; height: 20px; accent-color: var(--accent, #a9ef35); }
 .history-card--selected { outline: 1px solid var(--accent, #a9ef35); outline-offset: -1px; }
 .history-export-jump { color: var(--text); text-decoration: none; }
+.history-report-option { min-height:44px; display:flex; gap:8px; align-items:center; cursor:pointer; }
+.history-report-option input { width:20px; height:20px; accent-color:var(--accent,#a9ef35); }
+.history-comparison > summary {
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+  font-weight: 700;
+}
+.history-comparison-content, .history-comparison-exercise { display: grid; gap: 10px; }
+.history-comparison-exercise { border-top: 1px solid var(--line); padding-top: 10px; }
+.history-comparison-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.history-comparison-columns > div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+.history-comparison-columns ul { list-style: none; padding: 0; margin: 6px 0 0; font-size: .8rem; }
+.history-comparison-columns li + li { margin-top: 6px; }

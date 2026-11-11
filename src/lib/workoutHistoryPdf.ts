@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont } from 'pdf-lib';
 import { formatClock, formatWeight } from './format';
-import { recoveryWeekLabel } from './recovery';
+import { localWeekKey, recoveryWeekLabel } from './recovery';
+import { trainingTimeline } from './trainingTimeline';
 import { MUSCLE_LABELS } from './trainingModes';
 import type { WeightUnit, WorkoutHistory } from '../types';
 
@@ -14,7 +15,7 @@ const green = rgb(.10, .33, .23);
 const pale = rgb(.92, .96, .94);
 const dateTime = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
 
-export async function makeWorkoutHistoryPdf(sessions: readonly WorkoutHistory[], unit: WeightUnit, generatedAt = new Date()): Promise<File> {
+export async function makeWorkoutHistoryPdf(sessions: readonly WorkoutHistory[], unit: WeightUnit, generatedAt = new Date(), includeCharts = false): Promise<File> {
   if (!sessions.length) throw new Error('Selecione pelo menos um treino.');
   const pdf = await PDFDocument.create();
   pdf.setTitle('MeuTreino - Histórico de treinos');
@@ -77,6 +78,35 @@ export async function makeWorkoutHistoryPdf(sessions: readonly WorkoutHistory[],
   text('Somente sessões selecionadas. RIR é o número de repetições em reserva.', 9, normal, muted);
   text('Carga ou RIR sem registro: —. As séries não concluídas não fazem parte do histórico.', 9, normal, muted);
   y -= 11;
+  if (includeCharts) {
+    const last = sessions.reduce((latest, session) => Math.max(latest, Date.parse(session.finishedAt)), 0);
+    const rows = trainingTimeline(sessions, [], localWeekKey(new Date(last)));
+    const unitFactor = unit === 'lb' ? 2.2046226218 : 1;
+    const volume = sessions.flatMap((session) => session.exercises.flatMap((exercise) => exercise.sets))
+      .reduce((sum, set) => sum + (set.weight ?? 0) * set.reps, 0);
+    const fmt = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 });
+    text('Indicadores da seleção', 16, bold, green);
+    text(`Volume com carga em toda a seleção: ${fmt.format(volume * unitFactor)} ${unit} × reps.`);
+    text('Gráficos: oito semanas até a última sessão selecionada. Sem seleção não significa ausência de treino.', 9, normal, muted);
+    const chart = (name: string, field: 'sessions' | 'volumeKg', factor = 1) => {
+      y -= 10;
+      text(name, 12, bold);
+      const max = Math.max(1, ...rows.map((row) => row[field]));
+      for (const row of rows) {
+        const value = row[field];
+        draw(`${row.week.slice(8)}/${row.week.slice(5, 7)}`, MARGIN, y, 9);
+        page.drawRectangle({ x: MARGIN + 52, y: y - 2, width: 285, height: 8, color: pale });
+        if (value > 0) page.drawRectangle({ x: MARGIN + 52, y: y - 2, width: 285 * value / max, height: 8, color: green });
+        draw(fmt.format(value * factor), MARGIN + 350, y, 9);
+        y -= 16;
+      }
+    };
+    chart('Sessões selecionadas por semana', 'sessions');
+    chart(`Volume semanal (${unit} × reps)`, 'volumeKg', unitFactor);
+    text('Volume soma carga × repetições; séries sem carga não entram no cálculo.', 9, normal, muted);
+    nextPage();
+    text('Sessões detalhadas', 18, bold);
+  }
   for (const [index, session] of ordered.entries()) {
     space(120);
     text(`${index + 1}. ${session.planName}`, 16, bold, green);
@@ -84,6 +114,7 @@ export async function makeWorkoutHistoryPdf(sessions: readonly WorkoutHistory[],
     const sessionSets = session.exercises.flatMap((exercise) => exercise.sets);
     text(`Duração: ${formatClock(session.durationSeconds)}   |   ${session.exercises.length} ${session.exercises.length === 1 ? 'exercício' : 'exercícios'}   |   ${sessionSets.length} ${sessionSets.length === 1 ? 'série' : 'séries'}   |   ${sessionSets.reduce((n, set) => n + set.reps, 0)} reps`);
     if (session.trainingMode) text(`Ficha usada: ${session.trainingMode === 'express' ? 'Express' : 'Completa'}`);
+    if (session.plannedSetCount !== undefined) text(`Séries realizadas / planejadas: ${sessionSets.length} / ${session.plannedSetCount}`);
     if (session.recoveryWeekStart) text(`Reposição da semana de ${recoveryWeekLabel(session.recoveryWeekStart)}`);
     if (session.notes?.trim()) text(`Anotações: ${session.notes}`);
     y -= 8;
@@ -91,6 +122,7 @@ export async function makeWorkoutHistoryPdf(sessions: readonly WorkoutHistory[],
       const name = exercise.muscleGroup ? `${exercise.exerciseName} · ${MUSCLE_LABELS[exercise.muscleGroup]}` : exercise.exerciseName;
       space(58);
       text(name, 11, bold);
+      if (exercise.restSeconds !== undefined) text(`Descanso da ficha: ${exercise.restSeconds} s`);
       space(40);
       tableHead();
       for (const [row, set] of exercise.sets.entries()) {

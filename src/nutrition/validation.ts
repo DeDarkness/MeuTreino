@@ -1,5 +1,6 @@
 import type { NutritionState } from "./types";
 import { validDate } from "./engine";
+import { EXTRA_CIRCUMFERENCES } from './bodyMetrics';
 
 type RecordValue = Record<string, unknown>;
 const record = (value: unknown): value is RecordValue =>
@@ -210,12 +211,11 @@ export function validateNutrition(value: unknown): NutritionState {
   }
   const measurements = list(state.measurements, "medidas", 10000);
   unique(measurements, "id", "medidas");
-  unique(measurements, "date", "dia da medida");
   for (const raw of measurements) {
     const measurement = object(raw, "medida");
     date(measurement.date, "data medida");
-    number(measurement.weightKg, "peso", 20, 500, true);
-    number(measurement.bodyFat, "percentual de gordura", 1, 75, true);
+    number(measurement.weightKg, "peso", 1, 800, true);
+    number(measurement.bodyFat, "percentual de gordura", 0, 100, true);
     for (const key of [
       "waistCm",
       "hipCm",
@@ -225,6 +225,13 @@ export function validateNutrition(value: unknown): NutritionState {
       "calfCm",
     ])
       number(measurement[key], key, 1, 400, true);
+    for (const key of Object.keys(EXTRA_CIRCUMFERENCES)) {
+      if (measurement[key] !== undefined) number(measurement[key], key, 1, 400, true);
+    }
+    for (const key of ['measuredAt', 'createdAt', 'updatedAt']) {
+      const value = measurement[key];
+      if (value !== undefined && (typeof value !== 'string' || !Number.isFinite(Date.parse(value)))) fail(key);
+    }
     text(measurement.method, "método", 200);
     text(measurement.notes, "observações medidas");
     if (measurement.bodyFat !== null && !String(measurement.method).trim())

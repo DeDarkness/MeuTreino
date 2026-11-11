@@ -1,3 +1,5 @@
+import type { EXTRA_CIRCUMFERENCES } from './bodyMetrics';
+
 export type Nutrients = {
   kcal: number;
   protein: number;
@@ -77,6 +79,9 @@ export type NutritionDay = {
 export type BodyMeasurement = {
   id: string;
   date: string;
+  measuredAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
   weightKg: number | null;
   waistCm: number | null;
   hipCm: number | null;
@@ -87,7 +92,7 @@ export type BodyMeasurement = {
   bodyFat: number | null;
   method: string;
   notes: string;
-};
+} & Partial<Record<keyof typeof EXTRA_CIRCUMFERENCES, number | null>>;
 export type MealTemplate = {
   id: string;
   name: string;

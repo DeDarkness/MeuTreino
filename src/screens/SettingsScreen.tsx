@@ -2,22 +2,27 @@ import { BellRing, Check, Database, Dumbbell, Download, LockKeyhole, Smartphone,
 import { useEffect, useRef, useState } from 'react';
 
 import { PushNotificationSettings } from '../components/PushNotificationSettings';
+import { BackupFileButtons } from '../components/BackupFileButtons';
+import { ActionDialog } from '../components/ActionDialog';
 import type { PushStatus } from '../lib/pushNotifications';
 import { playRestAlert, primeRestAlertAudio } from '../lib/restAlert';
 import { readSafetySnapshot } from '../lib/database';
 import { formatDate } from '../lib/format';
 import type { Preferences } from '../types';
+import type { FullBodyProtocol } from '../lib/starterPlans';
 
 type SettingsScreenProps = {
   preferences: Preferences;
   isStandalone: boolean;
   storagePersistent: boolean | null;
   onPreferencesChange: (patch: Partial<Preferences>) => void;
-  onExport: () => Promise<void>;
-  onExportRecovery: () => Promise<void>;
+  onExport: () => Promise<File>;
+  onExportRecovery: () => Promise<File>;
+  onRestoreCheckpoint: () => Promise<void>;
   onImport: (file: File) => Promise<void>;
   onClear: () => Promise<void>;
-  onInstallPreSurgicalProtocol: () => Promise<void>;
+  onInstallFullBodyProtocol: (stage: FullBodyProtocol) => Promise<void>;
+  onOpenNutritionArchive: () => void;
   onRequestPersistence: () => Promise<boolean>;
   pushStatus: PushStatus;
   onNotificationPermissionChange: () => void;
@@ -30,9 +35,11 @@ export function SettingsScreen({
   onPreferencesChange,
   onExport,
   onExportRecovery,
+  onRestoreCheckpoint,
   onImport,
   onClear,
-  onInstallPreSurgicalProtocol,
+  onInstallFullBodyProtocol,
+  onOpenNutritionArchive,
   onRequestPersistence,
   pushStatus,
   onNotificationPermissionChange,
@@ -40,6 +47,8 @@ export function SettingsScreen({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [prepared, setPrepared] = useState<File | null>(null);
+  const [protocol, setProtocol] = useState<FullBodyProtocol | null>(null);
   const [checkpoint, setCheckpoint] = useState<{ label: string; createdAt: string } | null>(null);
   useEffect(() => { let active = true; void readSafetySnapshot().then((value) => { if (active) setCheckpoint(value ? { label: value.label, createdAt: value.createdAt } : null); }).catch(() => undefined); return () => { active = false; }; }, [message]);
   const vibrationSupported = typeof navigator !== 'undefined' && 'vibrate' in navigator;
@@ -101,6 +110,9 @@ export function SettingsScreen({
 
       <SettingsGroup title="Padrões do treino" icon={<Smartphone />}>
         <ToggleRow label="Reduzir animações" description="Pausa o wallpaper em vídeo e reduz os movimentos da interface. Também respeita a preferência de acessibilidade do iPhone." checked={preferences.reduceMotion ?? false} onChange={(reduceMotion) => onPreferencesChange({ reduceMotion })} />
+        <ToggleRow label="Foto de evolução no Início" description="Mostra a miniatura da última foto neste aparelho." checked={preferences.showProgressPhotoOnHome ?? false} onChange={(showProgressPhotoOnHome) => {
+          if (!showProgressPhotoOnHome || window.confirm('Mostrar sua última foto de evolução no Início?')) onPreferencesChange({ showProgressPhotoOnHome });
+        }} />
         <div className="setting-row stacked">
           <div><strong>Descanso padrão</strong><span>Usado ao adicionar um exercício.</span></div>
           <div className="rest-options" role="group" aria-label="Descanso padrão">
@@ -122,17 +134,22 @@ export function SettingsScreen({
       </SettingsGroup>
 
       <SettingsGroup title="Protocolos de treino" icon={<Dumbbell />}>
-        <button className="setting-action" type="button" onClick={() => {
-          if (window.confirm('Aplicar Full Body pré-cirurgia (22/23/21 séries)? Isso substitui as fichas padrão A/B/C. O histórico e as demais fichas serão preservados. Fichas padrão editadas serão arquivadas como versões pessoais. Recomendamos exportar backup antes.')) {
-            void run(onInstallPreSurgicalProtocol, 'Protocolo pré-cirurgia instalado. Fichas e histórico pessoal preservados.');
-          }
-        }}><Dumbbell /> <span><strong>Aplicar Full Body pré-cirurgia</strong><small>66 séries semanais · A/B/C · prioridade em costas e braços · atualização manual e reversível por backup.</small></span></button>
+        {([66, 70, 74] as const).map((stage) => <button key={stage} className="setting-action" type="button" disabled={busy} onClick={() => setProtocol(stage)}>
+          <Dumbbell /> <span><strong>{stage === 66 ? 'Full Body original' : 'Full Body V-Taper'} · {stage} séries</strong><small>{stage === 66 ? '22 / 23 / 21' : stage === 70 ? '23 / 25 / 22 · etapa gradual' : '24 / 26 / 24 · ficha completa'}</small></span>
+        </button>)}
       </SettingsGroup>
 
       <SettingsGroup title="Dados neste iPhone" icon={<Database />}>
+        <button className="setting-action" type="button" onClick={onOpenNutritionArchive}><Download /> <span><strong>Consultar e exportar alimentação anterior</strong><small>Diário e relatórios já cadastrados.</small></span></button>
         <div className="privacy-box"><LockKeyhole /><div><strong>Seus dados neste aparelho</strong><p>Treinos, alimentação, medidas e orientações pessoais ficam somente aqui. Se você ativar os avisos em segundo plano, a Cloudflare recebe apenas a inscrição de notificações e os avisos agendados. Não existe sincronização automática entre dispositivos.</p></div></div>
-        <button className="setting-action" type="button" disabled={busy} onClick={() => run(onExport, 'Backup exportado.')}><Download /> <span><strong>Exportar backup completo</strong><small>Inclui treinos, histórico, sessão ativa, reposições, alimentação, perfil e medidas. Salve no app Arquivos. Wallpaper e inscrição Push não são incluídos. O arquivo contém dados pessoais: guarde com cuidado.</small></span></button>
-        {checkpoint ? <button className="setting-action" type="button" disabled={busy} onClick={() => run(onExportRecovery, 'Cópia de segurança exportada. Use Importar backup se desejar restaurá-la.')}><Download /><span><strong>Exportar cópia de segurança anterior</strong><small>{checkpoint.label} · {formatDate(checkpoint.createdAt, true)}. Guardada antes de importar, excluir ou trocar fichas.</small></span></button> : null}
+        <button className="setting-action" type="button" disabled={busy} onClick={() => run(async () => setPrepared(await onExport()), 'Backup preparado. Escolha compartilhar ou baixar.')}><Download /> <span><strong>Exportar backup JSON</strong><small>Treinos, histórico, sessão ativa, reposições, alimentação, perfil e medidas. Para fotografias, use o backup ZIP.</small></span></button>
+        {checkpoint ? <>
+          <button className="setting-action" type="button" disabled={busy} onClick={() => run(async () => setPrepared(await onExportRecovery()), 'Cópia anterior preparada. Escolha compartilhar ou baixar.')}><Download /><span><strong>Exportar cópia de segurança anterior</strong><small>{checkpoint.label} · {formatDate(checkpoint.createdAt, true)}.</small></span></button>
+          <button className="setting-action" type="button" disabled={busy} onClick={() => {
+            if (window.confirm('Restaurar a cópia anterior? Os dados atuais serão substituídos e guardados como nova cópia de segurança.')) void run(onRestoreCheckpoint, 'Cópia anterior restaurada.');
+          }}><Database /><span><strong>Restaurar cópia de segurança anterior</strong><small>Confirme antes de substituir os dados. Não funciona durante um treino.</small></span></button>
+        </> : null}
+        {prepared ? <BackupFileButtons file={prepared} /> : null}
         <p className="elite-caption elite-settings-caption">Uma cópia anterior é protegida automaticamente nas operações acima. Ela permanece somente neste aparelho e não substitui um backup no app Arquivos.</p>
         <button className="setting-action" type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}><Upload /> <span><strong>Importar backup</strong><small>Valida o JSON antes de substituir os dados e preserva uma cópia anterior.</small></span></button>
         <input
@@ -157,10 +174,10 @@ export function SettingsScreen({
           <div className="persistence-ok"><Check size={17} /> Armazenamento persistente ativo</div>
         ) : null}
         <button className="setting-action danger" type="button" disabled={busy} onClick={() => {
-          if (window.confirm('Apagar treinos, histórico, pendências, alimentação, perfil, medidas e ajustes deste iPhone? Esta ação não pode ser desfeita.')) {
+          if (window.confirm('Apagar treinos, histórico, pendências, alimentação, perfil, medidas, fotos e ajustes deste aparelho? Esta ação não pode ser desfeita.')) {
             void run(onClear, 'Dados apagados.');
           }
-        }}><Trash2 /> <span><strong>Apagar todos os dados</strong><small>Remove treinos, histórico, pendências, alimentação, medidas, perfil, sessão ativa, wallpaper e a cópia de segurança local.</small></span></button>
+        }}><Trash2 /> <span><strong>Apagar todos os dados</strong><small>Remove treinos, histórico, pendências, alimentação, medidas, fotos, perfil, sessão ativa, wallpaper e a cópia de segurança local.</small></span></button>
       </SettingsGroup>
 
       <SettingsGroup title="Instalação" icon={<Smartphone />}>
@@ -176,7 +193,16 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 8.2.0 · seu treino, seus dados</span></footer>
+      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 8.4.0</span></footer>
+      {protocol ? <ActionDialog action={{
+        title: `Aplicar ${protocol} séries semanais?`,
+        message: 'O app vai arquivar fichas A/B/C personalizadas e ativar a etapa escolhida.',
+        confirmLabel: 'Aplicar protocolo',
+        onConfirm: async () => {
+          await onInstallFullBodyProtocol(protocol);
+          setMessage(`Ficha de ${protocol} séries semanais aplicada.`);
+        },
+      }} onClose={() => setProtocol(null)} /> : null}
     </section>
   );
 }

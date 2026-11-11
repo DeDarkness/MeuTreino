@@ -1,9 +1,10 @@
-import { Check, Clock3, Dumbbell, Share2, Sparkles, Target, TrendingUp, Trophy, X, Zap } from 'lucide-react';
+import { CalendarClock, Check, Clock3, Dumbbell, Share2, Sparkles, Target, TrendingUp, Trophy, X, Zap } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useDialogFocus } from '../hooks/useDialogFocus';
 
 import { formatDuration, formatWeight } from '../lib/format';
 import { getPotentialRecordLabels } from '../lib/progress';
+import type { WorkoutFinishResult } from '../lib/workout';
 import type { WeightUnit, WorkoutHistory } from '../types';
 import './workout-summary.css';
 
@@ -11,16 +12,20 @@ type WorkoutSummaryDialogProps = {
   workout: WorkoutHistory;
   previousHistory: WorkoutHistory[];
   weightUnit: WeightUnit;
+  recovery: WorkoutFinishResult['recovery'];
   onClose: () => void;
   onViewProgress: () => void;
+  onViewRecovery: (week: string) => void;
 };
 
 export function WorkoutSummaryDialog({
   workout,
   previousHistory,
   weightUnit,
+  recovery,
   onClose,
   onViewProgress,
+  onViewRecovery,
 }: WorkoutSummaryDialogProps) {
   const [shared, setShared] = useState(false);
   const dialogRef = useDialogFocus(onClose);
@@ -45,10 +50,16 @@ export function WorkoutSummaryDialog({
         <div className="workout-summary-hero">
           <span><Trophy aria-hidden="true" /></span>
           <p>TREINO FINALIZADO</p>
-          <h2 id="workout-summary-title">Mandou muito bem!</h2>
+          <h2 id="workout-summary-title">{summary.totalSets ? 'Mandou muito bem!' : 'Sessão encerrada'}</h2>
           <strong>{workout.planName}</strong>
         </div>
 
+        {recovery ? <div className="workout-summary-recovery">
+          <div><strong>{recovery.sets} {recovery.sets === 1 ? 'série pendente' : 'séries pendentes'} no Dia D</strong><span>Guardadas na semana de origem. Você escolhe quando repor.</span></div>
+          <button type="button" className="button button-secondary" onClick={() => onViewRecovery(recovery.week)}><CalendarClock size={18} aria-hidden="true" /> Ver Dia D</button>
+        </div> : null}
+
+        {summary.totalSets ? <>
         <div className="workout-summary-stats">
           <SummaryStat icon={<Clock3 />} value={formatDuration(workout.durationSeconds)} label="duração" />
           <SummaryStat icon={<Dumbbell />} value={String(summary.totalSets)} label="séries" />
@@ -84,6 +95,7 @@ export function WorkoutSummaryDialog({
           <button className="is-primary" type="button" onClick={onViewProgress}><TrendingUp size={19} /> Ver minha evolução</button>
           <button type="button" onClick={() => void share()}>{shared ? <Check size={19} /> : <Share2 size={19} />} {shared ? 'Resumo copiado' : 'Compartilhar resumo'}</button>
         </div>
+        </> : <p className="workout-summary-note">Nenhuma série concluída entrou no histórico.</p>}
       </section>
     </div>
   );

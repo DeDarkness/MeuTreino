@@ -6,6 +6,7 @@ import {
 import type { Food, NutritionState } from "./types";
 import type { Update } from "./uiHelpers";
 import { dateLabel, display } from "./uiHelpers";
+import { downloadLocalFile } from "../lib/localFiles";
 import { localDate, offsetDate, totalNutrients } from "./engine";
 import {
   applyStarterDiet,
@@ -40,16 +41,7 @@ export function StarterDietPanel({
     (entry) => entry.date === date && entry.kind === "planned",
   );
   const exportText = () => {
-    const url = URL.createObjectURL(
-      new Blob([starterDietText(date, choices, catalog)], {
-        type: "text/plain;charset=utf-8",
-      }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "MeuTreino - Dieta e substituicoes.txt";
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    downloadLocalFile(new File([starterDietText(date, choices, catalog)], "MeuTreino - Dieta e substituicoes.txt", { type: "text/plain;charset=utf-8" }));
   };
   const apply = async (days: 1 | 7) => {
     try {

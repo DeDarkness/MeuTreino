@@ -37,4 +37,9 @@ describe('PDF local do histórico', () => {
   it('rejeita exportação sem sessões', async () => {
     await expect(makeWorkoutHistoryPdf([], 'kg')).rejects.toThrow('Selecione');
   });
+
+  it('acrescenta a página de indicadores sem remover os detalhes das sessões', async () => {
+    const file = await makeWorkoutHistoryPdf([session], 'kg', at, true);
+    expect((await PDFDocument.load(await file.arrayBuffer())).getPageCount()).toBe(2);
+  });
 });

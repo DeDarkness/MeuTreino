@@ -13,17 +13,20 @@ import { formatDate, greeting, todayLabel } from '../lib/format';
 import { WeeklyDashboard } from '../components/WeeklyDashboard';
 import { RecoveryPanel } from '../components/RecoveryPanel';
 import { hasWeeklyPlanRecord, localWeekKey, savedRecoverySets } from '../lib/recovery';
-import { NutritionSummary } from '../nutrition/NutritionSummary';
-import type { NutritionState } from '../nutrition/types';
+import { VTaperDashboard } from '../components/VTaperDashboard';
+import type { BodyMeasurement } from '../nutrition/types';
 import { FULL_BODY_DAYS, getSuggestedPlanId } from '../lib/starterPlans';
 import { plannedSets } from '../lib/trainingModes';
-import type { ActiveWorkout, Exercise, RecoveryItem, RecoverySelection, WorkoutHistory, WorkoutPlan } from '../types';
+import type { ActiveWorkout, Exercise, RecoveryItem, RecoverySelection, WeightUnit, WorkoutHistory, WorkoutPlan } from '../types';
 
 type HomeScreenProps = {
   plans: WorkoutPlan[];
   calendarWeek?: string;
-  nutrition?: NutritionState;
-  onOpenNutrition?: () => void;
+  recoveryFocusWeek?: string;
+  measurements?: BodyMeasurement[];
+  weightUnit?: WeightUnit;
+  showProgressPhoto?: boolean;
+  onOpenBody?: () => void;
   history: WorkoutHistory[];
   activeWorkout: ActiveWorkout | null;
   recoveryItems: RecoveryItem[];
@@ -41,8 +44,11 @@ type HomeScreenProps = {
 export function HomeScreen({
   plans,
   calendarWeek,
-  nutrition,
-  onOpenNutrition,
+  recoveryFocusWeek,
+  measurements = [],
+  weightUnit = 'kg',
+  showProgressPhoto = false,
+  onOpenBody,
   history,
   activeWorkout,
   recoveryItems,
@@ -108,8 +114,6 @@ export function HomeScreen({
           </button>
         </article>
       ) : null}
-
-      {nutrition && onOpenNutrition ? <NutritionSummary state={nutrition} onOpen={onOpenNutrition} /> : null}
 
       {availableDays.length > 0 ? (
         <section className="day-picker" aria-labelledby="day-picker-title">
@@ -191,7 +195,8 @@ export function HomeScreen({
         </article>
       )}
 
-      <RecoveryPanel items={recoveryItems} currentWeek={week} activeWorkout={activeWorkout} onStart={onStartRecovery} onDiscard={onDiscardRecovery} />
+      <RecoveryPanel key={recoveryFocusWeek} initialWeek={recoveryFocusWeek} items={recoveryItems} currentWeek={week} activeWorkout={activeWorkout} onStart={onStartRecovery} onDiscard={onDiscardRecovery} />
+      {onOpenBody ? <VTaperDashboard history={history} plans={plans} unit={weightUnit} measurements={measurements} showPhoto={showProgressPhoto} onOpen={onOpenBody} /> : null}
       <WeeklyDashboard plans={plans} history={history} />
 
       {lastWorkout ? (

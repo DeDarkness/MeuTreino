@@ -1,0 +1,24 @@
+.meal-reuse > summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  font-weight: 700;
+}
+
+.meal-reuse label {
+  display: grid;
+  gap: 4px;
+  margin-block: 8px;
+}
+
+.meal-reuse :is(input, select) {
+  min-height: 44px;
+  min-width: 0;
+  font-size: 16px;
+}
+
+.meal-reuse__favorite {
+  display: grid;
+  gap: 4px;
+  margin-block-start: 8px;
+}

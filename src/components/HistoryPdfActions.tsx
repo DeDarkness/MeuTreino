@@ -1,8 +1,14 @@
 import { Download, FileText, Share2 } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { downloadLocalFile, shareLocalFile } from '../lib/localFiles';
 import type { WeightUnit, WorkoutHistory } from '../types';
 
-export function HistoryPdfActions({ sessions, weightUnit }: { sessions: WorkoutHistory[]; weightUnit: WeightUnit }) {
+export function HistoryPdfActions({ sessions, weightUnit, includeCharts, onChartsChange }: {
+  sessions: WorkoutHistory[];
+  weightUnit: WeightUnit;
+  includeCharts: boolean;
+  onChartsChange: (checked: boolean) => void;
+}) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -15,7 +21,7 @@ export function HistoryPdfActions({ sessions, weightUnit }: { sessions: WorkoutH
     setMessage('');
     try {
       const { makeWorkoutHistoryPdf } = await import('../lib/workoutHistoryPdf');
-      setFile(await makeWorkoutHistoryPdf(sessions, weightUnit));
+      setFile(await makeWorkoutHistoryPdf(sessions, weightUnit, new Date(), includeCharts));
     } catch {
       setMessage('Não foi possível preparar o PDF. Tente selecionar menos sessões e gerar novamente.');
     } finally { lock.current = false; setBusy(false); }
@@ -26,13 +32,7 @@ export function HistoryPdfActions({ sessions, weightUnit }: { sessions: WorkoutH
     lock.current = true;
     setMessage('');
     try {
-      const data = { files: [file] };
-      if (!navigator.share || !navigator.canShare?.(data)) {
-        setMessage('Compartilhamento direto indisponível aqui. Baixe o PDF e envie como documento no WhatsApp.');
-        return;
-      }
-      // The file already exists; invoke sharing in the tap, before any await.
-      await navigator.share(data);
+      await shareLocalFile(file);
     } catch (cause) {
       if (!(cause instanceof Error && cause.name === 'AbortError')) setMessage('Não foi possível abrir o compartilhamento. Use Baixar PDF e envie o arquivo pelo WhatsApp.');
     } finally { lock.current = false; }
@@ -40,17 +40,12 @@ export function HistoryPdfActions({ sessions, weightUnit }: { sessions: WorkoutH
 
   const download = () => {
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = file.name;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    try { downloadLocalFile(file); }
+    catch { setMessage('Não foi possível iniciar o download. Tente compartilhar o arquivo.'); }
   };
 
   return <div className="history-pdf-actions" aria-busy={busy}>
+    <label className="history-report-option"><input type="checkbox" checked={includeCharts} disabled={busy} onChange={(event) => { onChartsChange(event.target.checked); setFile(null); setMessage(''); }} /> Incluir gráficos e indicadores</label>
     {file ? <>
       <p className="elite-caption" role="status">PDF pronto: {sessions.length} {sessions.length === 1 ? 'sessão' : 'sessões'}. Escolha WhatsApp na folha de compartilhamento, ou baixe o arquivo.</p>
       <div className="history-export-buttons">

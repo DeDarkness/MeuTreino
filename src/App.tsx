@@ -1,10 +1,11 @@
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 
 import { ActiveWorkoutDock } from './components/ActiveWorkoutDock';
 import { ActionDialog, type ActionConfirmation } from './components/ActionDialog';
 import { AppStatus } from './components/AppStatus';
-import { exportSafetySnapshot } from './lib/database';
+import { exportSafetySnapshot, importState } from './lib/database';
+import { BackupFileButtons } from './components/BackupFileButtons';
 import { useReducedMotion } from './hooks/useReducedMotion';
 import { BottomNav, type AppTab } from './components/BottomNav';
 import { UpdatePrompt } from './components/UpdatePrompt';
@@ -18,15 +19,19 @@ import { getRestNotificationPermission, type RestNotificationPermission } from '
 import { enablePushNotifications } from './lib/pushNotifications';
 import { isAutomaticMissFor, localWeekKey, remainingSetCount } from './lib/recovery';
 import { ActiveWorkoutScreen } from './screens/ActiveWorkoutScreen';
-import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
-import { PlansScreen } from './screens/PlansScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
-import { WallpaperScreen } from './screens/WallpaperScreen';
-import type { ActiveWorkoutSet, WorkoutHistory, WorkoutPlan } from './types';
-import { NutritionScreen } from './nutrition/NutritionScreen';
-import { BodyPanel } from './nutrition/BodyPanel';
+import type { ActiveWorkoutSet, WorkoutPlan } from './types';
+import type { WorkoutFinishResult } from './lib/workout';
 import { emptyNutrition } from './nutrition/engine';
+
+const HistoryScreen = lazy(() => import('./screens/HistoryScreen').then((module) => ({ default: module.HistoryScreen })));
+const PlansScreen = lazy(() => import('./screens/PlansScreen').then((module) => ({ default: module.PlansScreen })));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then((module) => ({ default: module.SettingsScreen })));
+const WallpaperScreen = lazy(() => import('./screens/WallpaperScreen').then((module) => ({ default: module.WallpaperScreen })));
+const NutritionScreen = lazy(() => import('./nutrition/NutritionScreen').then((module) => ({ default: module.NutritionScreen })));
+const BodyPanel = lazy(() => import('./nutrition/BodyPanel').then((module) => ({ default: module.BodyPanel })));
+const PhotoEvolution = lazy(() => import('./screens/PhotoEvolution').then((module) => ({ default: module.PhotoEvolution })));
+const ProgressBackup = lazy(() => import('./components/ProgressBackup').then((module) => ({ default: module.ProgressBackup })));
 
 type NavigatorWithStandalone = Navigator & { standalone?: boolean };
 
@@ -40,9 +45,23 @@ export default function App() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [storagePersistent, setStoragePersistent] = useState<boolean | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<RestNotificationPermission>(() => getRestNotificationPermission());
-  const [completedSummary, setCompletedSummary] = useState<WorkoutHistory | null>(null);
+  const [completedSummary, setCompletedSummary] = useState<WorkoutFinishResult | null>(null);
+  const [recoveryTarget, setRecoveryTarget] = useState<{ week: string } | null>(null);
   const [confirmation, setConfirmation] = useState<ActionConfirmation | null>(null);
+  const [emergencyBackup, setEmergencyBackup] = useState<File | null>(null);
+  const [emergencyError, setEmergencyError] = useState('');
+  const [bodyView, setBodyView] = useState<'measurements' | 'photos'>('measurements');
   const runAction = (operation: Promise<unknown>) => { void operation.catch(() => undefined); };
+
+  useEffect(() => {
+    if (activeTab !== 'home' || showActiveWorkout || !recoveryTarget) return;
+    const frame = window.requestAnimationFrame(() => {
+      const panel = document.getElementById('weekly-recovery');
+      panel?.focus({ preventScroll: true });
+      panel?.scrollIntoView({ block: 'start' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTab, recoveryTarget, showActiveWorkout]);
 
   useEffect(() => {
     const media = window.matchMedia('(display-mode: standalone)');
@@ -65,7 +84,7 @@ export default function App() {
 
   const state = store.state;
   const activeWorkout = state?.activeWorkout ?? null;
-  useRestAlert(activeWorkout, state?.preferences ?? null, store.skipRest);
+  useRestAlert(activeWorkout, state?.preferences ?? null, store.clearExpiredRest);
   const completedSets = useMemo(
     () => activeWorkout?.exercises.reduce(
       (total, exercise) => total + (exercise.skipped ? 0 : exercise.sets.filter((set) => set.completed).length),
@@ -102,12 +121,18 @@ export default function App() {
           <button className="button button-primary" type="button" onClick={() => window.location.reload()}>
             <RefreshCw size={19} /> Tentar novamente
           </button>
-          <button className="text-button danger" type="button" onClick={() => {
-            if (!window.confirm('Apagar os dados locais com problema e recomeçar sem treinos?')) return;
-            void store.clearData().then(() => window.location.reload()).catch(() => undefined);
-          }}>
-            Apagar dados locais e recomeçar
-          </button>
+          <button className="button button-secondary" type="button" onClick={() => {
+            setEmergencyError('');
+            void exportSafetySnapshot().then((json) => setEmergencyBackup(new File([json], 'meutreino-recuperacao.json', { type: 'application/json' }))).catch((cause: unknown) => setEmergencyError(cause instanceof Error ? cause.message : 'Cópia não disponível.'));
+          }}>Preparar cópia de segurança</button>
+          {emergencyBackup ? <BackupFileButtons file={emergencyBackup} /> : null}
+          <label>Importar backup para recuperar <input type="file" accept="application/json,.json" onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (!file || !window.confirm('Substituir os dados locais por este backup?')) return;
+            void file.text().then(importState).then(() => window.location.reload()).catch((cause: unknown) => setEmergencyError(cause instanceof Error ? cause.message : 'Não foi possível recuperar.'));
+          }} /></label>
+          {emergencyError ? <p role="alert">{emergencyError}</p> : null}
         </div>
       </main>
     );
@@ -136,29 +161,7 @@ export default function App() {
   const exportBackup = async (recovery = false) => {
     const json = recovery ? await exportSafetySnapshot() : await store.exportData();
     const date = new Date().toISOString().slice(0, 10);
-    const file = new File([json], `meutreino-${recovery ? 'recuperacao' : 'backup'}-${date}.json`, { type: 'application/json' });
-    const shareNavigator = navigator as Navigator & {
-      canShare?: (data: ShareData) => boolean;
-      share?: (data: ShareData) => Promise<void>;
-    };
-
-    if (shareNavigator.share && shareNavigator.canShare?.({ files: [file] })) {
-      await shareNavigator.share({
-        title: 'Backup do MeuTreino',
-        text: 'Backup local dos meus treinos.',
-        files: [file],
-      });
-      return;
-    }
-
-    const url = URL.createObjectURL(file);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = file.name;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+    return new File([json], `meutreino-${recovery ? 'recuperacao' : 'backup'}-${date}.json`, { type: 'application/json' });
   };
 
   const requestPersistence = async () => {
@@ -179,11 +182,13 @@ export default function App() {
           <div className="global-error active-error" role="alert">
             <AlertTriangle size={18} />
             <span>{store.error}</span>
+            <button type="button" disabled={store.saving} aria-label="Reabrir dados salvos" onClick={() => runAction(store.reloadSaved())}><RefreshCw size={15} /></button>
             <button type="button" aria-label="Fechar aviso" onClick={store.clearError}>×</button>
           </div>
         ) : null}
         <ActiveWorkoutScreen
           workout={activeWorkout}
+          saving={store.saving}
           preferences={state.preferences}
           history={state.history}
           onUpdateSet={(exerciseIndex, setIndex, patch) => {
@@ -198,11 +203,11 @@ export default function App() {
             if (!exercise || !set) return;
             runAction(store.selectSet(exercise.exerciseId, set.id));
           }}
-          onCompleteSet={() => {
+          onCompleteSet={(patch) => {
             const exercise = activeWorkout.exercises[activeWorkout.currentExerciseIndex];
             const set = exercise?.sets[activeWorkout.currentSetIndex];
             if (!exercise || !set) return;
-            runAction(store.completeSet(exercise.exerciseId, set.id));
+            runAction(store.completeSet(exercise.exerciseId, set.id, patch));
           }}
           onUncompleteSet={(exerciseIndex, setIndex) => {
             const exercise = activeWorkout.exercises[exerciseIndex];
@@ -231,12 +236,13 @@ export default function App() {
           onFinish={() => {
             const remaining = remainingSetCount(activeWorkout);
             setConfirmation({ title: 'Encerrar esta sessão?',
-              message: `${completedSets ? `${completedSets} ${completedSets === 1 ? 'série será registrada' : 'séries serão registradas'} no histórico.` : 'Nenhuma série foi concluída: não será criado um treino no histórico.'} ${remaining ? `${remaining} ${remaining === 1 ? 'série não concluída fica' : 'séries não concluídas, inclusive exercícios pulados, ficam'} na fila para escolher outro dia.` : 'Todas as séries foram concluídas.'} Você decide se e quando repor.`,
+              message: `${completedSets ? `${completedSets} ${completedSets === 1 ? 'série será registrada' : 'séries serão registradas'} no histórico.` : 'Nenhuma série foi concluída, então a sessão ficará fora do histórico.'} ${remaining ? 'As séries pendentes ficam no Dia D da semana de origem. Você escolhe quando repor.' : 'Todas as séries desta sessão foram concluídas.'}`,
               confirmLabel: 'Encerrar e salvar', onConfirm: async () => {
                 const saved = await store.finishWorkout();
                 setShowActiveWorkout(false);
-                setActiveTab(saved.exercises.length ? 'history' : 'home');
-                setCompletedSummary(saved.exercises.length ? saved : null);
+                setRecoveryTarget(null);
+                setActiveTab(saved.recovery || !saved.history.exercises.length ? 'home' : 'history');
+                setCompletedSummary(saved.recovery || saved.history.exercises.length ? saved : null);
               },
             });
           }}
@@ -254,7 +260,7 @@ export default function App() {
             setShowActiveWorkout(false);
           }}
         />
-        <UpdatePrompt workoutInProgress />
+        <UpdatePrompt workoutInProgress saving={store.saving} canReload={store.canReload} />
         {actionDialog}
       </div>
     );
@@ -269,16 +275,21 @@ export default function App() {
           <div className="global-error" role="alert">
             <AlertTriangle size={18} />
             <span>{store.error}</span>
+            <button type="button" disabled={store.saving} aria-label="Reabrir dados salvos" onClick={() => runAction(store.reloadSaved())}><RefreshCw size={15} /></button>
             <button type="button" aria-label="Fechar aviso" onClick={store.clearError}>×</button>
           </div>
         ) : null}
 
+        <Suspense fallback={<p className="elite-caption" role="status">Abrindo tela…</p>}>
         {activeTab === 'home' ? (
           <HomeScreen
             plans={state.plans}
             calendarWeek={store.calendarWeek}
-            nutrition={state.nutrition}
-            onOpenNutrition={() => setActiveTab('nutrition')}
+            recoveryFocusWeek={recoveryTarget?.week}
+            measurements={state.nutrition?.measurements}
+            weightUnit={state.preferences.weightUnit}
+            showProgressPhoto={state.preferences.showProgressPhotoOnHome}
+            onOpenBody={() => { setBodyView('measurements'); setActiveTab('body'); }}
             history={state.history}
             activeWorkout={activeWorkout}
             recoveryItems={state.recoveryItems ?? []}
@@ -309,15 +320,27 @@ export default function App() {
 
         {activeTab === 'nutrition' ? <NutritionScreen state={state.nutrition ?? emptyNutrition()} update={store.updateNutrition} history={state.history} /> : null}
 
-        {activeTab === 'history' ? <>
-          <section className="nutrition-screen"><BodyPanel state={state.nutrition ?? emptyNutrition()} change={store.updateNutrition} /></section>
+        {activeTab === 'history' ? (
           <HistoryScreen
             history={state.history}
             plans={state.plans}
             weightUnit={state.preferences.weightUnit}
             onDelete={(id) => runAction(store.deleteHistory(id))}
+            calendarWeek={store.calendarWeek}
+            cycle={state.trainingCycle}
+            onCycleChange={store.updateCycle}
           />
-        </> : null}
+        ) : null}
+
+        {activeTab === 'body' ? <section className="screen nutrition-screen" aria-labelledby="body-title">
+          <header className="screen-heading"><h1 id="body-title">Evolução corporal</h1></header>
+          <div className="evolution-tabs" role="group" aria-label="Evolução corporal">
+            <button type="button" className={bodyView === 'measurements' ? 'is-active' : ''} aria-pressed={bodyView === 'measurements'} onClick={() => setBodyView('measurements')}>Medidas e gráficos</button>
+            <button type="button" className={bodyView === 'photos' ? 'is-active' : ''} aria-pressed={bodyView === 'photos'} onClick={() => setBodyView('photos')}>Evolução fotográfica</button>
+          </div>
+          {bodyView === 'measurements' ? <BodyPanel state={state.nutrition ?? emptyNutrition()} change={store.updateNutrition} />
+            : <PhotoEvolution measurements={state.nutrition?.measurements ?? []} />}
+        </section> : null}
 
         {activeTab === 'wallpaper' ? (
           <WallpaperScreen
@@ -340,18 +363,22 @@ export default function App() {
             onPreferencesChange={(patch) => runAction(store.updatePreferences(patch))}
             onExport={() => exportBackup()}
             onExportRecovery={() => exportBackup(true)}
-            onInstallPreSurgicalProtocol={store.installPreSurgicalProtocol}
-            onImport={async (file) => { if (file.size > 25 * 1024 * 1024) throw new Error('Use um backup JSON de até 25 MB.'); await store.importData(await file.text()); }}
+            onRestoreCheckpoint={store.restoreCheckpoint}
+            onInstallFullBodyProtocol={store.installFullBodyProtocol}
+            onOpenNutritionArchive={() => setActiveTab('nutrition')}
+            onImport={async (file) => { await store.importData(file); }}
             onClear={async () => {
-              await Promise.all([store.clearData(), wallpaper.remove()]);
-              setActiveTab('home');
+              await store.clearData();
+              window.location.reload();
             }}
             onRequestPersistence={requestPersistence}
             pushStatus={pushStatus}
             onNotificationPermissionChange={() => setNotificationPermission(getRestNotificationPermission())}
           />
+          <ProgressBackup exportJson={store.exportData} onRestore={store.restoreProgressArchive} />
           </>
         ) : null}
+        </Suspense>
       </main>
 
       {activeWorkout ? (
@@ -363,17 +390,19 @@ export default function App() {
           pushRestMessage={pushStatus.enabled && activeWorkout.restEndsAt ? pushStatus.message : null}
         />
       ) : null}
-      <BottomNav activeTab={activeTab} onChange={setActiveTab} />
+      <BottomNav activeTab={activeTab} onChange={(tab) => { setRecoveryTarget(null); setActiveTab(tab); }} />
       {completedSummary ? (
         <WorkoutSummaryDialog
-          workout={completedSummary}
-          previousHistory={state.history.filter((item) => item.id !== completedSummary.id)}
+          workout={completedSummary.history}
+          recovery={completedSummary.recovery}
+          previousHistory={state.history.filter((item) => item.id !== completedSummary.history.id)}
           weightUnit={state.preferences.weightUnit}
           onClose={() => setCompletedSummary(null)}
           onViewProgress={() => { setCompletedSummary(null); setActiveTab('history'); }}
+          onViewRecovery={(week) => { setCompletedSummary(null); setActiveTab('home'); setRecoveryTarget({ week }); }}
         />
       ) : null}
-      <UpdatePrompt workoutInProgress={Boolean(activeWorkout)} />
+      <UpdatePrompt workoutInProgress={Boolean(activeWorkout)} saving={store.saving} canReload={store.canReload} />
       {actionDialog}
     </div>
   );

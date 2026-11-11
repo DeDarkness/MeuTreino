@@ -417,15 +417,17 @@ describe("validação nutricional rigorosa e retrocompatibilidade", () => {
   });
 });
 describe("interface sem metas ou dados pessoais fictícios", () => {
-  it("oferece cinco áreas com Alimentação, sem perder o tipo de navegação do Wallpaper", () => {
+  it("oferece cinco áreas com Histórico e Evolução corporal", () => {
     const html = renderToStaticMarkup(
       createElement(BottomNav, {
-        activeTab: "nutrition",
+        activeTab: "body",
         onChange: () => undefined,
       }),
     );
     expect(html.match(/<button /g)).toHaveLength(5);
-    expect(html).toContain("Alimentação");
+    expect(html).toContain("Histórico");
+    expect(html).toContain("Evolução");
+    expect(html).not.toContain("Alimentação");
     expect(html).toContain('aria-current="page"');
   });
   it("não mostra meta restritiva, peso inventado ou gráfico fake na abertura", () => {

@@ -1,0 +1,13 @@
+.progress-photo-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); gap: 10px; }
+.progress-photo-gallery button { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 12px; overflow: hidden; text-align: left; padding: 0; cursor: pointer; }
+.progress-photo-gallery img { width: 100%; display: block; aspect-ratio: 3 / 4; object-fit: contain; background: #0b0d0b; }
+.progress-photo-gallery span { display: block; padding: 8px; font-size: .8rem; }
+.progress-photo-comparison { display: grid; position: relative; overflow: hidden; background: #0b0d0b; border-radius: 12px; }
+.progress-photo-comparison.is-side { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.progress-photo-comparison.is-stacked > div { grid-area: 1 / 1; }
+.progress-photo-comparison img { width: 100%; height: 100%; max-height: 65vh; aspect-ratio: 3 / 4; display: block; object-fit: contain; }
+.photo-divider { position: absolute; inset-block: 0; width: 2px; background: var(--accent); pointer-events: none; }
+.photo-zoom { display: grid; padding-block: 10px; }
+.photo-zoom input, .progress-photo-comparison input { min-height: 44px; }
+.photo-inspect { overflow: auto; max-height: 55vh; margin-bottom: 10px; }
+.photo-inspect img { display: block; width: 100%; }

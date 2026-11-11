@@ -1,12 +1,80 @@
-import { IDBFactory } from 'fake-indexeddb';
+import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { clearSafetySnapshot, createSeedState, exportSafetySnapshot, importState, loadState, readSafetySnapshot, saveState, validateAppState } from './database';
-import { completeActiveSet, finishActiveWorkout, startWorkoutFromPlan, getRestTarget, selectActiveSet } from './workout';
+import { clearSafetySnapshot, createSeedState, exportSafetySnapshot, exportState, importState, loadState, loadStateVersioned, readSafetySnapshot, saveState, saveStateVersioned, StorageConflictError, validateAppState } from './database';
+import { addRestTime, clearExpiredRest, completeActiveSet, finishActiveWorkout, startWorkoutFromPlan, getRestTarget, selectActiveSet, logActiveSet } from './workout';
+import { createWriteQueue } from './writeQueue';
 
 beforeEach(() => vi.stubGlobal('indexedDB', new IDBFactory()));
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('proteção do histórico e compatibilidade', () => {
+  it('reverte dados e checkpoint quando uma escrita falha por falta de espaço', async () => {
+    const first = await saveState(createSeedState());
+    const baseline = await saveStateVersioned({ ...first, preferences: { ...first.preferences, reduceMotion: true } }, { checkpointLabel: 'Checkpoint antigo' });
+    const checkpoint = await readSafetySnapshot();
+    const put = IDBObjectStore.prototype.put;
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, value, key) {
+      if (value.id === 'app-state') throw new DOMException('Sem espaço', 'QuotaExceededError');
+      return put.call(this, value, key);
+    });
+    await expect(saveStateVersioned(first, { expectedRevision: baseline.revision, checkpointLabel: 'Novo checkpoint' })).rejects.toMatchObject({ name: 'QuotaExceededError' });
+    expect(await loadStateVersioned()).toEqual(baseline);
+    expect(await readSafetySnapshot()).toEqual(checkpoint);
+  });
+
+  it('aceita uma única gravação concorrente e rejeita a revisão vencida', async () => {
+    const baseline = await loadStateVersioned();
+    const writes = ['Minha ficha 1', 'Minha ficha 2'].map((name) => {
+      const state = structuredClone(baseline.state);
+      state.plans[0].name = name;
+      return saveStateVersioned(state, { expectedRevision: baseline.revision, checkpointLabel: 'Antes de editar' });
+    });
+    const result = await Promise.allSettled(writes);
+    const successful = result.filter((item) => item.status === 'fulfilled');
+    expect(successful).toHaveLength(1);
+    expect(result.find((item) => item.status === 'rejected')?.reason).toBeInstanceOf(StorageConflictError);
+    expect(await loadStateVersioned()).toEqual(successful[0].value);
+    expect((await readSafetySnapshot())?.value).toEqual(baseline.state);
+  });
+
+  it('cancela ações enfileiradas depois de uma falha e permite uma tentativa nova', async () => {
+    const queue = createWriteQueue();
+    const action = vi.fn(async () => 'confirmado');
+    const failure = queue.run(async () => { throw new Error('Sem espaço'); });
+    const canceled = queue.run(action);
+    expect(queue.busy).toBe(true);
+    await expect(failure).rejects.toThrow('Sem espaço');
+    await expect(canceled).rejects.toThrow('cancelada');
+    await queue.idle();
+    expect(action).not.toHaveBeenCalled();
+    expect(queue.busy).toBe(false);
+    await expect(queue.run(action)).resolves.toBe('confirmado');
+  });
+
+  it('recupera uma série de um backup antigo com descanso absoluto e rejeita corrupção do novo', async () => {
+    const initial = createSeedState();
+    const started = startWorkoutFromPlan(initial, initial.plans[0].id).state;
+    const exercise = started.activeWorkout!.exercises[0];
+    const set = exercise.sets[0];
+    const logged = logActiveSet(started, exercise.exerciseId, set.id, { reps: 9, weight: 25, rir: 2 });
+    const oldBackup = { app: 'MeuTreino', backupVersion: 1, exportedAt: new Date().toISOString(), state: logged };
+    await importState(JSON.stringify(oldBackup));
+    const reopened = await loadStateVersioned();
+    const workout = reopened.state.activeWorkout!;
+    expect(workout.exercises[0].sets[0]).toMatchObject({ completed: true, reps: 9, weight: 25, rir: 2 });
+    expect(logActiveSet(reopened.state, exercise.exerciseId, set.id, { reps: 99 })).toBe(reopened.state);
+    const deadline = workout.restEndsAt!;
+    expect(deadline).toBe(logged.activeWorkout!.restEndsAt);
+    expect(clearExpiredRest(reopened.state, workout.id, deadline, Date.parse(deadline) - 1)).toBe(reopened.state);
+    const extended = addRestTime(reopened.state, 15, new Date(Date.parse(deadline) - 1000));
+    expect(clearExpiredRest(extended, workout.id, deadline, Date.parse(deadline))).toBe(extended);
+    expect(clearExpiredRest(reopened.state, workout.id, deadline, Date.parse(deadline) + 60_000).activeWorkout?.restEndsAt).toBeNull();
+    const backup = JSON.parse(await exportState());
+    expect(backup.stateSha256).toMatch(/^[a-f0-9]{64}$/);
+    backup.state.activeWorkout.exercises[0].sets[0].weight = 99;
+    await expect(importState(JSON.stringify(backup))).rejects.toThrow('integridade');
+    expect(await loadStateVersioned()).toEqual(reopened);
+  });
   it('preserva o estado anterior atomicamente durante uma importação', async () => {
     const previous = createSeedState();
     previous.plans[0].name = 'Minha ficha pessoal';
