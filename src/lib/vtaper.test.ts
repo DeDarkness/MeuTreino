@@ -1,7 +1,7 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createSeedState, loadStateVersioned, saveStateVersioned, exportState, listProgressPhotos, addProgressPhoto, deleteProgressPhoto } from './database';
-import { applyFullBodyProtocol, createVTaperPlans } from './starterPlans';
+import { createSeedState, loadStateVersioned, saveStateVersioned, exportState, listProgressPhotos, addProgressPhoto, deleteProgressPhoto, readSafetySnapshot } from './database';
+import { applyFullBodyProtocol, createVTaperPlans, createWeeklyWorkoutPlans, upgradeEliteProtocol } from './starterPlans';
 import { makeProgressArchive, mergeProgressArchive, readProgressArchive } from './progressArchive';
 import { startWorkoutFromPlan } from './workout';
 import type { ProgressPhoto } from './progressPhotos';
@@ -20,7 +20,7 @@ describe('Full Body V-Taper', () => {
   it('valida ordem, volumes diretos, superséries e séries unilaterais', () => {
     const [a, b, c] = createVTaperPlans(74);
     expect(a.exercises.map((item) => item.id)).toEqual([
-      'full-body-a-puxada-neutra', 'terca-hack', 'quarta-remada-maquina', 'segunda-supino-inclinado-halteres', 'sexta-stiff',
+      'full-body-a-puxada-neutra', 'vtaper-a-remada-curvada-barra', 'terca-hack', 'segunda-supino-inclinado-halteres', 'sexta-stiff',
       'segunda-elevacao-lateral', 'quarta-rosca-direta-halter', 'sabado-frances-polia', 'vtaper-a-scott', 'vtaper-a-testa',
       'terca-panturrilha', 'full-body-a-abdomen',
     ]);
@@ -30,7 +30,7 @@ describe('Full Body V-Taper', () => {
       'full-body-b-triceps-corda', 'full-body-b-abdomen', 'b-panturrilha-sentado',
     ]);
     expect(c.exercises.map((item) => item.id)).toEqual([
-      'quarta-serrote', 'terca-bulgaro', 'segunda-supino-declinado', 'quarta-pulldown', 'sexta-cadeira-flexora', 'terca-cadeira-extensora',
+      'vtaper-c-remada-baixa-corda', 'terca-bulgaro', 'segunda-supino-declinado', 'vtaper-c-pulldown-inclinado', 'sexta-cadeira-flexora', 'terca-cadeira-extensora',
       'vtaper-c-inverso', 'quinta-elevacao-lateral-polia', 'sabado-martelo', 'sabado-barra-w', 'vtaper-c-rosca-unilateral',
       'vtaper-c-testa-polia', 'sexta-panturrilha',
     ]);
@@ -45,7 +45,43 @@ describe('Full Body V-Taper', () => {
     });
     expect(a.exercises.slice(6, 8).map((item) => item.supersetGroup)).toEqual(['A', 'A']);
     expect(c.exercises.slice(8, 10).map((item) => item.supersetGroup)).toEqual(['C', 'C']);
-    expect(c.exercises[0]).toMatchObject({ targetSets: 3, notes: expect.stringContaining('ambos os lados') });
+    expect(a.exercises[1]).toMatchObject({ targetSets: 2, minReps: 8, targetReps: 12, restSeconds: 120, targetRirMin: 2, targetRirMax: 2, notes: expect.stringContaining('120 a 150 s') });
+    expect(a.exercises[4]).toEqual(createWeeklyWorkoutPlans().flatMap((plan) => plan.exercises).find((item) => item.id === 'sexta-stiff'));
+    expect(c.exercises[0]).toMatchObject({ targetSets: 3, minReps: 8, targetReps: 12, restSeconds: 120, targetRirMin: 2, targetRirMax: 2, notes: expect.stringContaining('banco reto') });
+    expect(c.exercises[3]).toMatchObject({ targetSets: 2, minReps: 10, targetReps: 15, restSeconds: 90, targetRirMin: 1, targetRirMax: 2, notes: expect.stringContaining('45°') });
+  });
+
+  it('atualiza as fichas V-Taper gravadas e preserva as sessões e as cargas antigas', async () => {
+    const before = createSeedState();
+    const [a, b, c] = createVTaperPlans(74);
+    const [baseA, , baseC] = createWeeklyWorkoutPlans();
+    const oldRow = baseA.exercises.find((item) => item.id === 'quarta-remada-maquina')!;
+    const oldCRow = baseC.exercises.find((item) => item.id === 'quarta-serrote')!;
+    const oldPulldown = baseC.exercises.find((item) => item.id === 'quarta-pulldown')!;
+    const customHack = { ...a.exercises[2], loadIncrementKg: 5 };
+    before.eliteProtocolVersion = 3;
+    before.plans = [
+      { ...a, exercises: [a.exercises[0], customHack, oldRow, ...a.exercises.slice(3)] },
+      b,
+      { ...c, exercises: [oldCRow, c.exercises[1], c.exercises[2], oldPulldown, ...c.exercises.slice(4)] },
+    ];
+    before.history = [{
+      id: 'treino-teste', planId: a.id, planName: a.name, startedAt: a.createdAt, finishedAt: a.createdAt, durationSeconds: 3600,
+      exercises: [{ exerciseId: oldRow.id, exerciseName: oldRow.name, sets: [{ id: 'serie-teste', setNumber: 1, reps: 10, weight: 45, rir: 2, completedAt: a.createdAt }] }],
+    }];
+    const active = startWorkoutFromPlan(before, a.id).state;
+    expect(upgradeEliteProtocol(active)).toBe(active);
+    const saved = await saveStateVersioned(before);
+    const { state } = await loadStateVersioned();
+    expect(state.history).toEqual(saved.state.history);
+    expect(state.preferences).toEqual(saved.state.preferences);
+    expect(state.recoveryItems).toEqual(saved.state.recoveryItems);
+    expect(state.plans[0].exercises[2]).toEqual(customHack);
+    expect(state.plans[1]).toEqual(b);
+    expect(state.plans[2].exercises).toEqual(c.exercises);
+    expect((await readSafetySnapshot())?.value.plans).toEqual(saved.state.plans);
+    expect(upgradeEliteProtocol(state)).toBe(state);
+    expect(startWorkoutFromPlan(state, a.id).workout.exercises[1].sets[0].weight).toBeNull();
   });
 
   it('preserva ficha editada, histórico e pendências ao trocar manualmente', () => {

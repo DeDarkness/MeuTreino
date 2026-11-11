@@ -274,7 +274,7 @@ export function useWorkoutStore(): WorkoutStore {
   const importData = useCallback((source: string | unknown): Promise<AppState> => commitDurable(async (current) => {
     if (current.activeWorkout) throw new Error('Encerre o treino em andamento antes de importar um backup.');
     const decoded = await decodeBackup(source instanceof Blob ? await source.text() : source);
-    const imported = { ...decoded, nutrition: decoded.nutrition ?? current.nutrition ?? emptyNutrition() };
+    const imported = upgradeEliteProtocol({ ...decoded, nutrition: decoded.nutrition ?? current.nutrition ?? emptyNutrition() });
     return { state: imported, result: imported };
   }, 'Antes da importação'), [commitDurable]);
 
@@ -291,7 +291,7 @@ export function useWorkoutStore(): WorkoutStore {
     const { mergeProgressArchive } = await import('../lib/progressArchive');
     const next = merge ? mergeProgressArchive(current, imported)
       : { ...imported, nutrition: imported.nutrition ?? current.nutrition ?? emptyNutrition() };
-    acceptSaved(await saveStateVersioned(next, {
+    acceptSaved(await saveStateVersioned(upgradeEliteProtocol(next), {
       expectedRevision: revisionRef.current, checkpointLabel: 'Antes de restaurar backup ZIP', addPhotos: photos,
     }));
   }), [acceptSaved, runWrite]);

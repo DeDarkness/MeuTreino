@@ -1,7 +1,7 @@
 import type { AppState, Exercise, WorkoutPlan, MuscleGroup } from '../types';
 
 export const STARTER_PLAN_VERSION = 2 as const;
-export const ELITE_PROTOCOL_VERSION = 3 as const;
+export const ELITE_PROTOCOL_VERSION = 4 as const;
 
 export const FULL_BODY_DAYS = [
   { planId: 'plan-full-body-a', short: 'SEG', label: 'Segunda', workout: 'A', offset: 0 },
@@ -186,7 +186,7 @@ export function installWeeklyWorkoutPlans(state: AppState, now = new Date().toIS
 
 export type FullBodyProtocol = 66 | 70 | 74;
 
-export function createVTaperPlans(stage: FullBodyProtocol, now = new Date().toISOString()): WorkoutPlan[] {
+function createPreviousVTaperPlans(stage: FullBodyProtocol, now: string): WorkoutPlan[] {
   const base = createWeeklyWorkoutPlans(now);
   if (stage === 66) return base;
   const [a, b, c] = base;
@@ -232,6 +232,49 @@ export function createVTaperPlans(stage: FullBodyProtocol, now = new Date().toIS
   ];
 }
 
+const updatedBackExercises = {
+  'quarta-remada-maquina': {
+    previousName: 'Remada máquina com apoio para o peito',
+    replacement: exercise({ id: 'vtaper-a-remada-curvada-barra', name: 'Remada curvada com barra', sets: 2, minReps: 8, reps: 12, restSeconds: 120, rir: '2', muscleGroup: 'costas', guidance: 'Descanso de 120 a 150 s.' }),
+  },
+  'quarta-serrote': {
+    previousName: 'Remada unilateral com apoio',
+    replacement: exercise({ id: 'vtaper-c-remada-baixa-corda', name: 'Remada baixa na polia com corda', sets: 3, minReps: 8, reps: 12, restSeconds: 120, rir: '2', muscleGroup: 'costas', guidance: 'Sentado em banco reto, puxe a corda em direção ao abdômen.' }),
+  },
+  'quarta-pulldown': {
+    previousName: 'Pulldown com braços estendidos',
+    replacement: exercise({ id: 'vtaper-c-pulldown-inclinado', name: 'Pulldown na polia alta com peito apoiado', sets: 2, minReps: 10, reps: 15, restSeconds: 90, rir: '1–2', muscleGroup: 'costas', guidance: 'Apoie o peito em um banco inclinado a aproximadamente 45°, afastado da polia. Mantenha os braços quase estendidos.' }),
+  },
+};
+
+function updateVTaperBackExercises(plan: WorkoutPlan, now: string): WorkoutPlan {
+  const monday = plan.id === 'plan-full-body-a';
+  const friday = plan.id === 'plan-full-body-c';
+  const isVTaper = plan.notes?.startsWith('V-Taper ') || plan.exercises.some((item) =>
+    item.id === (monday ? 'vtaper-a-scott' : 'vtaper-c-inverso'));
+  if ((!monday && !friday) || !isVTaper) return plan;
+
+  let changed = false;
+  const exercises = plan.exercises.map((item) => {
+    const change = updatedBackExercises[item.id as keyof typeof updatedBackExercises];
+    const matchesDay = monday ? item.id === 'quarta-remada-maquina' : item.id === 'quarta-serrote' || item.id === 'quarta-pulldown';
+    if (!matchesDay || item.name !== change?.previousName || plan.exercises.some((other) => other.id === change.replacement.id)) return item;
+    changed = true;
+    return change.replacement;
+  });
+  if (!changed) return plan;
+  if (monday) {
+    const rowIndex = exercises.findIndex((item) => item.id === 'vtaper-a-remada-curvada-barra');
+    const hackIndex = exercises.findIndex((item) => item.id === 'terca-hack');
+    if (hackIndex >= 0 && rowIndex > hackIndex) exercises.splice(hackIndex, 0, exercises.splice(rowIndex, 1)[0]);
+  }
+  return { ...plan, exercises, updatedAt: now };
+}
+
+export function createVTaperPlans(stage: FullBodyProtocol, now = new Date().toISOString()): WorkoutPlan[] {
+  return createPreviousVTaperPlans(stage, now).map((plan) => updateVTaperBackExercises(plan, now));
+}
+
 /** Instalação explícita evita substituir fichas editadas silenciosamente durante atualizações. */
 export function applyPreSurgicalProtocol(state: AppState, now = new Date().toISOString()): AppState {
   return applyFullBodyProtocol(state, 66, now);
@@ -242,7 +285,7 @@ export function applyFullBodyProtocol(state: AppState, stage: FullBodyProtocol, 
     throw new Error('Finalize ou abandone a sessão atual antes de trocar o protocolo.');
   }
   const bundledIds = new Set(['plan-full-body-a', 'plan-full-body-b', 'plan-full-body-c']);
-  const presets = ([66, 70, 74] as const).flatMap((step) => createVTaperPlans(step, now));
+  const presets = ([66, 70, 74] as const).flatMap((step) => [...createVTaperPlans(step, now), ...createPreviousVTaperPlans(step, now)]);
   const archivedPersonalized = state.plans
     .filter((plan) => bundledIds.has(plan.id) && !presets.some((preset) => preset.id === plan.id
       && preset.name === plan.name && preset.notes === plan.notes && JSON.stringify(preset.exercises) === JSON.stringify(plan.exercises)))
@@ -266,6 +309,12 @@ export function applyFullBodyProtocol(state: AppState, stage: FullBodyProtocol, 
 /** User-authorized release migration. Never interrupt a session or reapply after edits. */
 export function upgradeEliteProtocol(state: AppState, now = new Date().toISOString()): AppState {
   if (state.eliteProtocolVersion === ELITE_PROTOCOL_VERSION || state.activeWorkout) return state;
+  if (state.eliteProtocolVersion === 3) return {
+    ...state,
+    plans: state.plans.map((plan) => updateVTaperBackExercises(plan, now)),
+    eliteProtocolVersion: ELITE_PROTOCOL_VERSION,
+    updatedAt: now,
+  };
   let upgraded = state;
   if (state.eliteProtocolVersion === 1) {
     // This release changes only Monday's old core exercise, not personalized fichas.
