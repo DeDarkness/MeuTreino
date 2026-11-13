@@ -12,6 +12,38 @@ beforeEach(() => vi.stubGlobal('indexedDB', new IDBFactory()));
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Full Body V-Taper', () => {
+  it.each([3, 4])('ativa 74 séries para a ficha original salva na versão de protocolo %s', async (version) => {
+    const before = createSeedState();
+    before.eliteProtocolVersion = version;
+    before.preferences.soundEnabled = false;
+    const custom = { ...before.plans[0], id: 'ficha-pessoal', name: 'Treino pessoal' };
+    before.plans.push(custom);
+    await saveStateVersioned(before);
+    const { state, revision } = await loadStateVersioned();
+    expect(state.plans.slice(0, 3).map((plan) => plan.exercises.reduce((sum, item) => sum + item.targetSets, 0))).toEqual([24, 26, 24]);
+    expect(state.plans[0].exercises[1].name).toBe('Remada curvada com barra');
+    expect(state.plans[2].exercises[0].name).toBe('Remada baixa na polia com corda');
+    expect(state.plans[3]).toEqual(custom);
+    expect(state.preferences).toEqual(before.preferences);
+    expect((await readSafetySnapshot())?.value.plans).toEqual(before.plans);
+    expect((await loadStateVersioned()).revision).toBe(revision);
+  });
+
+  it('mantém a etapa de 70 séries e fichas padrão personalizadas', () => {
+    const original = createSeedState();
+    original.eliteProtocolVersion = 4;
+    original.plans[1].notes = 'Minha anotação';
+    expect(upgradeEliteProtocol(original).plans).toEqual(original.plans);
+    const transition = applyFullBodyProtocol(createSeedState(), 70);
+    transition.eliteProtocolVersion = 4;
+    expect(upgradeEliteProtocol(transition).plans).toEqual(transition.plans);
+  });
+
+  it('abre a ficha completa em uma instalação nova', async () => {
+    const { state } = await loadStateVersioned();
+    expect(state.plans.flatMap((plan) => plan.exercises).reduce((sum, item) => sum + item.targetSets, 0)).toBe(74);
+  });
+
   it.each([[66, [22, 23, 21]], [70, [23, 25, 22]], [74, [24, 26, 24]]] as const)('valida séries da etapa %s', (stage, totals) => {
     const plans = createVTaperPlans(stage);
     expect(plans.map((plan) => plan.exercises.reduce((sum, item) => sum + item.targetSets, 0))).toEqual(totals);

@@ -1,7 +1,7 @@
 import type { AppState, Exercise, WorkoutPlan, MuscleGroup } from '../types';
 
 export const STARTER_PLAN_VERSION = 2 as const;
-export const ELITE_PROTOCOL_VERSION = 4 as const;
+export const ELITE_PROTOCOL_VERSION = 5 as const;
 
 export const FULL_BODY_DAYS = [
   { planId: 'plan-full-body-a', short: 'SEG', label: 'Segunda', workout: 'A', offset: 0 },
@@ -287,8 +287,7 @@ export function applyFullBodyProtocol(state: AppState, stage: FullBodyProtocol, 
   const bundledIds = new Set(['plan-full-body-a', 'plan-full-body-b', 'plan-full-body-c']);
   const presets = ([66, 70, 74] as const).flatMap((step) => [...createVTaperPlans(step, now), ...createPreviousVTaperPlans(step, now)]);
   const archivedPersonalized = state.plans
-    .filter((plan) => bundledIds.has(plan.id) && !presets.some((preset) => preset.id === plan.id
-      && preset.name === plan.name && preset.notes === plan.notes && JSON.stringify(preset.exercises) === JSON.stringify(plan.exercises)))
+    .filter((plan) => bundledIds.has(plan.id) && !presets.some((preset) => samePrescription(plan, preset)))
     .map((plan) => ({
       ...plan,
       id: `plan-arquivo-${plan.id}-${now.replace(/\W/g, '')}`,
@@ -306,15 +305,28 @@ export function applyFullBodyProtocol(state: AppState, stage: FullBodyProtocol, 
   };
 }
 
+function samePrescription(plan: WorkoutPlan, preset: WorkoutPlan) {
+  return plan.id === preset.id && plan.name === preset.name && plan.notes === preset.notes
+    && JSON.stringify(plan.exercises) === JSON.stringify(preset.exercises);
+}
+
+function hasOriginalFullBody(state: AppState, now: string) {
+  return createWeeklyWorkoutPlans(now).every((preset) =>
+    state.plans.some((plan) => samePrescription(plan, preset)));
+}
+
 /** User-authorized release migration. Never interrupt a session or reapply after edits. */
 export function upgradeEliteProtocol(state: AppState, now = new Date().toISOString()): AppState {
   if (state.eliteProtocolVersion === ELITE_PROTOCOL_VERSION || state.activeWorkout) return state;
-  if (state.eliteProtocolVersion === 3) return {
-    ...state,
-    plans: state.plans.map((plan) => updateVTaperBackExercises(plan, now)),
-    eliteProtocolVersion: ELITE_PROTOCOL_VERSION,
-    updatedAt: now,
-  };
+  if (state.eliteProtocolVersion === 3 || state.eliteProtocolVersion === 4) {
+    if (hasOriginalFullBody(state, now)) return applyFullBodyProtocol(state, 74, now);
+    return {
+      ...state,
+      plans: state.plans.map((plan) => updateVTaperBackExercises(plan, now)),
+      eliteProtocolVersion: ELITE_PROTOCOL_VERSION,
+      updatedAt: now,
+    };
+  }
   let upgraded = state;
   if (state.eliteProtocolVersion === 1) {
     // This release changes only Monday's old core exercise, not personalized fichas.

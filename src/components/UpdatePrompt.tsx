@@ -3,18 +3,32 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useEffect, useRef, useState } from 'react';
 
 export function UpdatePrompt({ workoutInProgress = false, saving = false, canReload }: { workoutInProgress?: boolean; saving?: boolean; canReload?: () => boolean }) {
-  const interval = useRef<number | undefined>(undefined);
+  const registrationRef = useRef<ServiceWorkerRegistration | undefined>(undefined);
+  const checking = useRef(false);
   const [updateError, setUpdateError] = useState(false);
-  useEffect(() => () => window.clearInterval(interval.current), []);
+  useEffect(() => {
+    const check = () => {
+      const registration = registrationRef.current;
+      if (!registration || checking.current || document.visibilityState !== 'visible' || !navigator.onLine) return;
+      checking.current = true;
+      void registration.update().catch(() => undefined).finally(() => { checking.current = false; });
+    };
+    const interval = window.setInterval(check, 60 * 60 * 1000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('online', check);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('online', check);
+    };
+  }, []);
   const {
     offlineReady: [offlineReady, setOfflineReady],
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(_url, registration) {
-      if (!registration) return;
-      window.clearInterval(interval.current);
-      interval.current = window.setInterval(() => { void registration.update().catch(() => undefined); }, 60 * 60 * 1000);
+      registrationRef.current = registration;
     },
   });
 

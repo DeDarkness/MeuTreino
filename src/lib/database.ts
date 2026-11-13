@@ -11,7 +11,7 @@ import {
   type WorkoutSetHistory,
   type WallpaperAsset,
 } from '../types';
-import { createWeeklyWorkoutPlans, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION, ELITE_PROTOCOL_VERSION, upgradeEliteProtocol } from './starterPlans';
+import { applyFullBodyProtocol, createWeeklyWorkoutPlans, installWeeklyWorkoutPlans, STARTER_PLAN_VERSION, ELITE_PROTOCOL_VERSION, upgradeEliteProtocol } from './starterPlans';
 import { isWeekKey, MAX_RECOVERY_SETS, MAX_RECOVERY_SETS_PER_EXERCISE, MAX_SAVED_RECOVERY_ITEMS } from './recovery';
 import { emptyNutrition } from '../nutrition/engine';
 import { validateNutrition } from '../nutrition/validation';
@@ -661,7 +661,7 @@ export async function loadStateVersioned(retry = true): Promise<StoredSnapshot> 
       return { state: cloneState(upgraded), revision };
     }
 
-    const seeded = { ...createSeedState(), nutrition: emptyNutrition() };
+    const seeded = applyFullBodyProtocol(createSeedState(), 74);
     const revision = await writeRecord(database, seeded, { expectedRevision: null });
     return { state: cloneState(seeded), revision };
   } catch (error) {

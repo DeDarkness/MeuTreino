@@ -193,7 +193,7 @@ export function SettingsScreen({
         )}
       </SettingsGroup>
 
-      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 8.4.1</span></footer>
+      <footer className="app-about"><strong>MeuTreino Elite</strong><span>Versão 8.4.2</span></footer>
       {protocol ? <ActionDialog action={{
         title: `Aplicar ${protocol} séries semanais?`,
         message: 'O app vai arquivar fichas A/B/C personalizadas e ativar a etapa escolhida.',
